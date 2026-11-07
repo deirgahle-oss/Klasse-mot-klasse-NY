@@ -1,0 +1,147 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta http-equiv="Content-Style-Type" content="text/css">
+  <title></title>
+  <meta name="Generator" content="Cocoa HTML Writer">
+  <meta name="CocoaVersion" content="2575.7">
+  <style type="text/css">
+    p.p1 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica}
+    p.p2 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica; min-height: 14.0px}
+  </style>
+</head>
+<body>
+<p class="p1">&lt;!DOCTYPE html&gt;</p>
+<p class="p1">&lt;html lang="no"&gt;</p>
+<p class="p1">&lt;head&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;meta charset="UTF-8"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;title&gt;Arrangør - Klasse mot klasse&lt;/title&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;script src="https://cdn.tailwindcss.com"&gt;&lt;/script&gt;</p>
+<p class="p1">&lt;/head&gt;</p>
+<p class="p1">&lt;body class="bg-slate-900 text-white min-h-screen p-6"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;div class="max-w-4xl mx-auto space-y-8"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;h1 class="text-3xl font-bold text-yellow-400"&gt;Arrangørpanel - Klasse mot klasse&lt;/h1&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;!-- Konkurranse- og klasseadministrasjon --&gt;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;div class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;h2 class="text-xl font-semibold text-cyan-400"&gt;1. Administrer Konkurranse &amp; Klasser&lt;/h2&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;div class="grid grid-cols-1 md:grid-cols-2 gap-4"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;label class="block text-sm mb-1"&gt;Opprett ny konkurranse:&lt;/label&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;input type="text" id="compTitle" placeholder="F.eks. Høstquiz 8. trinn" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white mb-2"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;button onclick="createCompetition()" class="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded font-bold w-full"&gt;Opprett Konkurranse&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;label class="block text-sm mb-1"&gt;Legg til ny klasse (f.eks. 8A):&lt;/label&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;div class="flex gap-2"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                        </span>&lt;input type="text" id="classNameInput" placeholder="Klassenavn" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                        </span>&lt;button onclick="addClass()" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded font-bold"&gt;Legg til&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;/div&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;label class="block text-sm mb-1 font-semibold mt-4"&gt;Velg aktiv konkurranse:&lt;/label&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;select id="competitionSelect" onchange="loadActiveCompetition()" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;option value=""&gt;-- Velg konkurranse --&lt;/option&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;/select&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;/div&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;div id="classSelectionContainer" class="hidden mt-4 pt-4 border-t border-slate-700"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;h3 class="text-md font-semibold mb-2"&gt;Velg hvilke klasser som deltar i denne konkurransen:&lt;/h3&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;div id="classListCheckboxes" class="flex flex-wrap gap-4 mb-4"&gt;&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;button onclick="saveActiveCompetitionClasses()" class="bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded font-bold text-black"&gt;Lagre deltakende klasser&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;!-- Spillkontroller (Skjules til konkurranse er valgt) --&gt;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;div id="gameControls" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4 hidden"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;h2 class="text-xl font-semibold text-yellow-400"&gt;2. Styr Spillet&lt;/h2&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;div class="flex gap-4"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;button onclick="nextQuestion()" class="bg-green-600 hover:bg-green-500 px-6 py-3 rounded font-bold text-lg"&gt;Neste Spørsmål&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;button onclick="lockAnswers()" class="bg-red-600 hover:bg-red-500 px-6 py-3 rounded font-bold text-lg"&gt;Lås Svar&lt;/button&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;/div&gt;</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;script type="module"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">        </span>import { supabase } from './supabaseClient.js';</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>window.loadCompsAndClasses = async function() {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>// Hent klasser</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const { data: classes } = await supabase.from('classes').select('*');</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const box = document.getElementById('classListCheckboxes');</p>
+<p class="p1"><span class="Apple-converted-space">            </span>box.innerHTML = (classes || []).map(c =&gt; `</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;label class="flex items-center gap-2 cursor-pointer"&gt;</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>&lt;input type="checkbox" value="${c.id}" class="comp-class-cb w-5 h-5"&gt; ${c.name}</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;/label&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>`).join('');</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">            </span>// Hent konkurranser</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const { data: comps } = await supabase.from('competitions').select('*');</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const select = document.getElementById('competitionSelect');</p>
+<p class="p1"><span class="Apple-converted-space">            </span>select.innerHTML = '&lt;option value=""&gt;-- Velg konkurranse --&lt;/option&gt;' + (comps || []).map(co =&gt; `</p>
+<p class="p1"><span class="Apple-converted-space">                </span>&lt;option value="${co.id}"&gt;${co.title}&lt;/option&gt;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>`).join('');</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>window.addClass = async function() {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const name = document.getElementById('classNameInput').value.trim();</p>
+<p class="p1"><span class="Apple-converted-space">            </span>if (!name) return;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>await supabase.from('classes').insert([{ name }]);</p>
+<p class="p1"><span class="Apple-converted-space">            </span>document.getElementById('classNameInput').value = '';</p>
+<p class="p1"><span class="Apple-converted-space">            </span>loadCompsAndClasses();</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>window.createCompetition = async function() {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const title = document.getElementById('compTitle').value.trim();</p>
+<p class="p1"><span class="Apple-converted-space">            </span>if (!title) return;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>await supabase.from('competitions').insert([{ title, status: 'setup' }]);</p>
+<p class="p1"><span class="Apple-converted-space">            </span>document.getElementById('compTitle').value = '';</p>
+<p class="p1"><span class="Apple-converted-space">            </span>loadCompsAndClasses();</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>window.loadActiveCompetition = async function() {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const id = document.getElementById('competitionSelect').value;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const container = document.getElementById('classSelectionContainer');</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const controls = document.getElementById('gameControls');</p>
+<p class="p1"><span class="Apple-converted-space">            </span>if (!id) {</p>
+<p class="p1"><span class="Apple-converted-space">                </span>container.classList.add('hidden');</p>
+<p class="p1"><span class="Apple-converted-space">                </span>controls.classList.add('hidden');</p>
+<p class="p1"><span class="Apple-converted-space">                </span>return;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>}</p>
+<p class="p1"><span class="Apple-converted-space">            </span>container.classList.remove('hidden');</p>
+<p class="p1"><span class="Apple-converted-space">            </span>controls.classList.remove('hidden');</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">            </span>const { data } = await supabase.from('competitions').select('*').eq('id', id).single();</p>
+<p class="p1"><span class="Apple-converted-space">            </span>if (data &amp;&amp; data.active_class_ids) {</p>
+<p class="p1"><span class="Apple-converted-space">                </span>document.querySelectorAll('.comp-class-cb').forEach(cb =&gt; {</p>
+<p class="p1"><span class="Apple-converted-space">                    </span>cb.checked = data.active_class_ids.includes(cb.value);</p>
+<p class="p1"><span class="Apple-converted-space">                </span>});</p>
+<p class="p1"><span class="Apple-converted-space">            </span>}</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>window.saveActiveCompetitionClasses = async function() {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const id = document.getElementById('competitionSelect').value;</p>
+<p class="p1"><span class="Apple-converted-space">            </span>const selected = Array.from(document.querySelectorAll('.comp-class-cb:checked')).map(cb =&gt; cb.value);</p>
+<p class="p1"><span class="Apple-converted-space">            </span>await supabase.from('competitions').update({ active_class_ids: selected }).eq('id', id);</p>
+<p class="p1"><span class="Apple-converted-space">            </span>alert('Lagret deltakende klasser!');</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>window.nextQuestion = async function() {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>await supabase.from('game_state').update({ status: 'active', current_question: 1 }).eq('id', 1);</p>
+<p class="p1"><span class="Apple-converted-space">            </span>alert('Neste spørsmål aktivert!');</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>window.lockAnswers = async function() {</p>
+<p class="p1"><span class="Apple-converted-space">            </span>await supabase.from('game_state').update({ status: 'locked' }).eq('id', 1);</p>
+<p class="p1"><span class="Apple-converted-space">            </span>alert('Svar låst!');</p>
+<p class="p1"><span class="Apple-converted-space">        </span>}</p>
+<p class="p2"><br></p>
+<p class="p1"><span class="Apple-converted-space">        </span>loadCompsAndClasses();</p>
+<p class="p1"><span class="Apple-converted-space">    </span>&lt;/script&gt;</p>
+<p class="p1">&lt;/body&gt;</p>
+<p class="p1">&lt;/html&gt;</p>
+</body>
+</html>
