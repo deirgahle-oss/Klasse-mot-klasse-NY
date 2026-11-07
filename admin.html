@@ -36,6 +36,7 @@
                 </select>
             </div>
 
+            <!-- Klassevelger for den aktive konkurransen -->
             <div id="classSelectionContainer" class="hidden pt-4 border-t border-slate-700 space-y-3">
                 <h3 class="text-md font-semibold text-yellow-300">Velg hvilke klasser som deltar i denne konkurransen:</h3>
                 <div id="classListCheckboxes" class="grid grid-cols-2 md:grid-cols-3 gap-3 bg-slate-900 p-4 rounded border border-slate-700"></div>
@@ -61,7 +62,7 @@
             </div>
         </div>
 
-        <!-- Felt for å registrere fasit underveis hvis den ikke var kjent -->
+        <!-- Registrer fasit underveis -->
         <div id="liveCorrectAnswerSection" class="bg-slate-800 p-6 rounded-xl shadow border border-amber-500/50 space-y-3 hidden">
             <h3 class="text-lg font-semibold text-amber-400">✏️ Registrer fasit for aktiv oppgave</h3>
             <p class="text-xs text-slate-400">Denne oppgaven ble opprettet med ukjent fasit på forhånd. Registrer fasiten her før du viser resultater:</p>
@@ -205,7 +206,7 @@
 
             if (savedCompId && select.querySelector(`option[value="${savedCompId}"]`)) {
                 select.value = savedCompId;
-                loadQuestionsForCompetition(savedCompId);
+                await loadQuestionsForCompetition(savedCompId);
             }
         }
 
@@ -241,6 +242,7 @@
         async function loadQuestionsForCompetition(compId) {
             const section = document.getElementById('questionListSection');
             const questionFormSec = document.getElementById('questionSection');
+            const classSelContainer = document.getElementById('classSelectionContainer');
             const container = document.getElementById('questionsContainer');
             const overviewBox = document.getElementById('liveAnswersOverview');
             const liveCorrectSec = document.getElementById('liveCorrectAnswerSection');
@@ -248,6 +250,7 @@
             if (!compId) {
                 section.classList.add('hidden');
                 questionFormSec.classList.add('hidden');
+                classSelContainer.classList.add('hidden');
                 document.getElementById('liveControlSection').classList.add('hidden');
                 overviewBox.classList.add('hidden');
                 liveCorrectSec.classList.add('hidden');
@@ -257,10 +260,13 @@
 
             section.classList.remove('hidden');
             questionFormSec.classList.remove('hidden');
+            classSelContainer.classList.remove('hidden');
             document.getElementById('liveControlSection').classList.remove('hidden');
 
+            // Hent deltakende klasser for denne konkurransen
             const { data: compData } = await supabase.from('competitions').select('active_class_names').eq('id', compId).single();
             activeCompClasses = compData?.active_class_names || [];
+            renderClassCheckboxes(activeCompClasses);
 
             const { data: questions } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
             currentQuestions = questions || [];
@@ -282,7 +288,6 @@
                 
                 overviewBox.classList.remove('hidden');
 
-                // Vis felt for å registrere ukjent fasit hvis oppgaven er låst og fasit mangler
                 if (isLocked && (activeQ.correct_answer === null || activeQ.correct_answer === undefined)) {
                     liveCorrectSec.classList.remove('hidden');
                 } else {
@@ -318,7 +323,6 @@
         window.saveLiveCorrectAnswer = async function() {
             if (!currentActiveQuestionId) return;
             const rawVal = document.getElementById('liveCorrectInput').value;
-            // Sjekk om det er tid (min:sek) eller vanlig tall
             const activeQ = currentQuestions.find(q => q.id === currentActiveQuestionId);
             const correct_answer = activeQ.unit_type === 'tid' ? parseInputToSeconds(rawVal) : parseFloat(rawVal);
 
@@ -530,30 +534,43 @@
                 const q = qMap[a.question_id];
                 if (!q || q.correct_answer === null || q.correct_answer === undefined) return;
 
-                const diff = Math.abs(Number(a.answer_value) - Number(q.correct_answer));
-                const studentKey = `${a.student_name}_${a.class_name}`;
-
-                if (!studentStats[studentKey]) {
-                    studentStats[studentKey] = { name: a.student_name, className: a.class_name, totalDiff: 0, count: 0 };
+                // NY PROSENTBASERT POENGBEREGNIGN (maks 100 poeng per oppgave, avtar basert på relativ feil)
+                const fasit = Number(q.correct_answer);
+                const svar = Number(a.answer_value);
+                const diff = Math.abs(svar - fasit);
+                
+                let score = 0;
+                if (fasit === 0) {
+                    score = diff === 0 ? 100 : Math.max(0, 100 - diff * 10);
+                } else {
+                    const relError = diff / Math.abs(fasit); // Prosentvis avvik (f.eks. 0.2 = 20% feil)
+                    // Formel: 100 poeng ved 0% feil, faller gradvis. Ved 100% feil eller mer gir det færre poeng.
+                    score = Math.max(0, 100 * Math.exp(-3 * relError)); 
                 }
-                studentStats[studentKey].totalDiff += diff;
+
+                const studentKey = `${a.student_name}_${a.class_name}`;
+                if (!studentStats[studentKey]) {
+                    studentStats[studentKey] = { name: a.student_name, className: a.class_name, totalScore: 0, count: 0 };
+                }
+                studentStats[studentKey].totalScore += score;
                 studentStats[studentKey].count += 1;
 
                 if (!classStats[a.class_name]) {
-                    classStats[a.class_name] = { totalDiff: 0, totalCount: 0 };
+                    classStats[a.class_name] = { totalScore: 0, totalCount: 0 };
                 }
-                classStats[a.class_name].totalDiff += diff;
+                classStats[a.class_name].totalScore += score;
                 classStats[a.class_name].totalCount += 1;
             });
 
+            // Sorter på HØYEST poengsum (flest poeng er best nå)
             const studentArray = Object.values(studentStats).map(s => ({
-                name: s.name, className: s.className, avgDiff: s.count > 0 ? s.totalDiff / s.count : 0
-            })).sort((a, b) => a.avgDiff - b.avgDiff);
+                name: s.name, className: s.className, avgScore: s.count > 0 ? s.totalScore / s.count : 0
+            })).sort((a, b) => b.avgScore - a.avgScore);
 
             const classArray = Object.keys(classStats).map(className => {
                 const c = classStats[className];
-                return { className, avgDiff: c.totalCount > 0 ? c.totalDiff / c.totalCount : 999999 };
-            }).sort((a, b) => a.avgDiff - b.avgDiff);
+                return { className, avgScore: c.totalCount > 0 ? c.totalScore / c.totalCount : 0 };
+            }).sort((a, b) => b.avgScore - a.avgScore);
 
             let html = `<div class="space-y-6">`;
             
@@ -564,19 +581,19 @@
                 const rankPrefix = idx < 3 ? medals[idx] : `#${idx + 1}`;
                 html += `<div class="bg-slate-900 p-2.5 rounded flex justify-between items-center border border-slate-700 mb-1.5">
                     <span class="font-bold">${rankPrefix} ${st.name} <span class="text-xs text-slate-400 font-normal">(${st.className})</span></span>
-                    <span class="text-xs text-yellow-400 font-mono">Snitt avvik: ${st.avgDiff.toFixed(1)}</span>
+                    <span class="text-xs text-yellow-400 font-mono">Poengsnitt: ${st.avgScore.toFixed(1)} p</span>
                 </div>`;
             });
             html += `</div>`;
 
-            html += `<div><h4 class="text-lg font-bold text-yellow-300 mb-2 border-b border-slate-700 pb-1">🏫 ${top3Only ? 'Topp 3' : 'Alle'} Klasser (Klassesnitt)</h4>`;
+            html += `<div><h4 class="text-lg font-bold text-yellow-300 mb-2 border-b border-slate-700 pb-1">🏫 ${top3Only ? 'Topp 3' : 'Alle'} Klasser (Poengsnitt)</h4>`;
             const classSlice = top3Only ? classArray.slice(0, 3) : classArray;
             classSlice.forEach((cl, idx) => {
                 const medals = ['🥇', '🥈', '🥉'];
                 const rankPrefix = idx < 3 ? medals[idx] : `#${idx + 1}`;
                 html += `<div class="bg-slate-900 p-2.5 rounded flex justify-between items-center border border-slate-700 mb-1.5">
                     <span class="font-bold">${rankPrefix} ${cl.className}</span>
-                    <span class="text-xs text-emerald-400 font-mono">Klassesnitt avvik: ${cl.avgDiff.toFixed(1)}</span>
+                    <span class="text-xs text-emerald-400 font-mono">Klassesnitt: ${cl.avgScore.toFixed(1)} p</span>
                 </div>`;
             });
             html += `</div>`;
@@ -602,7 +619,6 @@
             document.getElementById('qUnitType').value = q.unit_type;
             document.getElementById('qCustomUnit').value = q.custom_unit || '';
             
-            // Sjekk om fasit er kjent eller ukjent
             if (q.correct_answer === null || q.correct_answer === undefined) {
                 document.querySelector('input[name="fasitMode"][value="unknown"]').checked = true;
                 handleFasitModeChange();
@@ -667,6 +683,7 @@
             if (!id) return;
             const selectedClasses = Array.from(document.querySelectorAll('.comp-class-cb:checked')).map(cb => cb.value);
             await supabase.from('competitions').update({ active_class_names: selectedClasses }).eq('id', id);
+            alert('Deltakende klasser er lagret!');
         });
 
         document.getElementById('saveQuestionBtn').addEventListener('click', async () => {
@@ -722,12 +739,7 @@
             loadQuestionsForCompetition(competition_id);
         });
 
-        document.getElementById('cancelEditBtn').addEventListener('click', () => {
-            document.getElementById('editingQuestionId').value = '';
-            document.getElementById('formTitle').textContent = '2. Opprett oppgave';
-            document.getElementById('saveQuestionBtn').textContent = 'Lagre Oppgave';
-            document.getElementById('cancelEditBtn').classList.add('hidden');
-        });
+        document.getElementById('cancelEditBtn').classList.add('hidden');
 
         function parseInputToSeconds(valueStr) {
             if (!valueStr && valueStr !== 0) return null;
