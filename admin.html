@@ -314,4 +314,249 @@
                 startLivePolling(activeQ.id, compId);
             } else {
                 currentActiveQuestionId = null;
-                statusBox.className = "p-4 rounded-xl border border-slate-600 bg-slate-900 text-slate-300 text-center font-bold text-
+                statusBox.className = "p-4 rounded-xl border border-slate-600 bg-slate-900 text-slate-300 text-center font-bold text-lg";
+                statusBox.textContent = "Status: Ingen aktiv oppgave pågår.";
+                overviewBox.classList.add('hidden');
+                liveCorrectSec.classList.add('hidden');
+                if (liveAnswersInterval) clearInterval(liveAnswersInterval);
+            }
+
+            container.innerHTML = currentQuestions.map((q, index) => `
+                <div class="bg-slate-900 p-4 rounded border border-slate-700 flex justify-between items-center">
+                    <div>
+                        <span class="text-cyan-400 font-bold">#${index + 1}</span> <span class="font-medium">${q.question_text}</span> 
+                        <span class="text-xs ml-2 px-2 py-0.5 rounded bg-slate-800 text-yellow-300">Status: ${q.status}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="moveQuestion(${q.id}, 'up')" class="bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded text-sm font-bold" title="Flytt opp">⬆️</button>
+                        <button onclick="moveQuestion(${q.id}, 'down')" class="bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded text-sm font-bold" title="Flytt ned">⬇️</button>
+                        <button onclick="editQuestion(${q.id})" class="bg-amber-600 hover:bg-amber-500 px-3 py-1 rounded text-sm font-bold">Rediger</button>
+                        <button onclick="deleteQuestion(${q.id})" class="bg-red-600 hover:bg-red-500 px-3 py-1 rounded text-sm font-bold">Slett</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.saveLiveCorrectAnswer = async function() {
+            if (!currentActiveQuestionId) return;
+            const rawVal = document.getElementById('liveCorrectInput').value;
+            const activeQ = currentQuestions.find(q => q.id === currentActiveQuestionId);
+            const correct_answer = activeQ.unit_type === 'tid' ? parseInputToSeconds(rawVal) : parseFloat(rawVal);
+
+            if (isNaN(correct_answer)) {
+                alert('Vennligst skriv inn en gyldig fasit.');
+                return;
+            }
+
+            await supabase.from('questions').update({ correct_answer }).eq('id', currentActiveQuestionId);
+            document.getElementById('liveCorrectInput').value = '';
+            document.getElementById('liveCorrectAnswerSection').classList.add('hidden');
+            alert('Fasit er lagret og sendt ut til elevtelefonene!');
+            loadQuestionsForCompetition(document.getElementById('competitionSelect').value);
+        }
+
+        function startLivePolling(questionId, compId) {
+            if (liveAnswersInterval) clearInterval(liveAnswersInterval);
+            fetchLiveMetrics(questionId, compId);
+            liveAnswersInterval = setInterval(() => fetchLiveMetrics(questionId, compId), 2000);
+        }
+
+        async function fetchLiveMetrics(questionId, compId) {
+            const { data: answers } = await supabase.from('answers').select('class_name').eq('question_id', questionId);
+            const countBox = document.getElementById('answersCountPerClassList');
+            const counts = {};
+            (answers || []).forEach(a => { counts[a.class_name] = (counts[a.class_name] || 0) + 1; });
+            const classesToShow = activeCompClasses.length > 0 ? activeCompClasses : allClasses.map(c => c.name);
+
+            countBox.innerHTML = classesToShow.map(className => {
+                const delivered = counts[className] || 0;
+                return `
+                    <div class="bg-slate-900 p-3 rounded border ${delivered > 0 ? 'border-emerald-600 bg-emerald-950/30' : 'border-slate-700'} flex justify-between items-center">
+                        <span class="font-medium text-sm text-slate-200">${className}</span>
+                        <span class="px-2.5 py-1 rounded font-bold text-xs ${delivered > 0 ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'}">${delivered} levert</span>
+                    </div>
+                `;
+            }).join('');
+
+            renderParticipantsList(compId);
+        }
+
+        async function renderParticipantsList(compId) {
+            const { data: questions } = await supabase.from('questions').select('id').eq('competition_id', compId);
+            if (!questions || questions.length === 0) return;
+            const qIds = questions.map(q => q.id);
+
+            const { data: answers } = await supabase.from('answers').select('*').in('question_id', qIds);
+            const container = document.getElementById('participantsListContainer');
+
+            const uniqueMap = {};
+            (answers || []).forEach(a => {
+                if (a.student_name) {
+                    uniqueMap[`${a.student_name}_${a.class_name}`] = { student_name: a.student_name, class_name: a.class_name };
+                }
+            });
+
+            const participants = Object.values(uniqueMap);
+            if (participants.length === 0) {
+                container.innerHTML = `<p class="text-xs text-slate-400 italic">Ingen registrerte deltakere ennå.</p>`;
+                return;
+            }
+
+            container.innerHTML = participants.map(p => `
+                <div class="flex justify-between items-center bg-slate-800 p-2 rounded text-xs">
+                    <span><strong>${p.student_name}</strong> <span class="text-slate-400">(${p.class_name})</span></span>
+                    <button onclick="deleteParticipant('${p.student_name}', '${p.class_name}')" class="bg-red-600 hover:bg-red-500 px-2 py-1 rounded font-bold text-white">Slett</button>
+                </div>
+            `).join('');
+        }
+
+        window.deleteParticipant = async function(studentName, className) {
+            if (!confirm(`Vil du slette deltakeren ${studentName} (${className})?`)) return;
+            await supabase.from('answers').delete().eq('student_name', studentName).eq('class_name', className);
+            alert('Deltaker er slettet.');
+        }
+
+        window.moveQuestion = async function(id, direction) {
+            const index = currentQuestions.findIndex(q => q.id === id);
+            if (index === -1) return;
+            const targetIndex = direction === 'up' ? index - 1 : index + 1;
+            if (targetIndex < 0 || targetIndex >= currentQuestions.length) return;
+
+            const temp = currentQuestions[index];
+            currentQuestions[index] = currentQuestions[targetIndex];
+            currentQuestions[targetIndex] = temp;
+
+            for (let i = 0; i < currentQuestions.length; i++) {
+                await supabase.from('questions').update({ sort_order: i }).eq('id', currentQuestions[i].id);
+            }
+            loadQuestionsForCompetition(document.getElementById('competitionSelect').value);
+        }
+
+        window.startKlasseMotKlasse = async function() {
+            const compId = document.getElementById('competitionSelect').value;
+            if (!compId || currentQuestions.length === 0) return;
+            await supabase.from('competitions').update({ status: 'active' }).eq('id', compId);
+
+            const firstQ = currentQuestions[0];
+            await supabase.from('questions').update({ status: 'active' }).eq('id', firstQ.id);
+            loadQuestionsForCompetition(compId);
+        }
+
+        window.restartCompetition = async function() {
+            if (!confirm('Vil du restarte konkurransen? Dette setter alle oppgaver tilbake til ventemodus ("Klar til dyst?").')) return;
+            const compId = document.getElementById('competitionSelect').value;
+            if (!compId) return;
+
+            await supabase.from('competitions').update({ status: 'setup' }).eq('id', compId);
+            await supabase.from('questions').update({ status: 'pending' }).eq('competition_id', compId);
+
+            alert('Konkurransen er restartet!');
+            loadQuestionsForCompetition(compId);
+        }
+
+        window.deleteCurrentCompetition = async function() {
+            const compId = document.getElementById('competitionSelect').value;
+            if (!compId) {
+                alert('Vennligst velg en konkurranse å slette først.');
+                return;
+            }
+
+            if (!confirm('Er du sikker på at du vil slette denne konkurransen? Alle oppgaver og innsendte svar vil bli permanent slettet.')) return;
+
+            const { data: qList } = await supabase.from('questions').select('id').eq('competition_id', compId);
+            if (qList && qList.length > 0) {
+                const qIds = qList.map(q => q.id);
+                await supabase.from('answers').delete().in('question_id', qIds);
+                await supabase.from('questions').delete().eq('competition_id', compId);
+            }
+
+            const { error } = await supabase.from('competitions').delete().eq('id', compId);
+            if (error) {
+                alert('Kunne ikke slette konkurranse: ' + error.message);
+                return;
+            }
+
+            localStorage.removeItem('kmk_active_comp_id');
+            alert('Konkurransen er slettet.');
+            initData();
+        }
+
+        window.lockAnswersCountdown = async function() {
+            const compId = document.getElementById('competitionSelect').value;
+            const { data: qList } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
+            const activeQ = (qList || []).find(q => q.status === 'active');
+            
+            if (!activeQ) {
+                alert('Fant ingen aktiv oppgave å låse.');
+                return;
+            }
+
+            await supabase.from('questions').update({ status: 'countdown' }).eq('id', activeQ.id);
+
+            for (let i = 5; i > 0; i--) {
+                document.getElementById('activeLiveStatus').textContent = `⏳ Låser om ${i} sekunder...`;
+                await new Promise(r => setTimeout(r, 1000));
+            }
+
+            await supabase.from('questions').update({ status: 'locked' }).eq('id', activeQ.id);
+            loadQuestionsForCompetition(compId);
+        }
+
+        window.openAnswersAgain = async function() {
+            const compId = document.getElementById('competitionSelect').value;
+            const { data: qList } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
+            const targetQ = (qList || []).find(q => q.status === 'locked' || q.status === 'active' || q.status === 'countdown');
+            if (!targetQ) return;
+
+            await supabase.from('questions').update({ status: 'active' }).eq('id', targetQ.id);
+            loadQuestionsForCompetition(compId);
+        }
+
+        window.nextQuestion = async function() {
+            const compId = document.getElementById('competitionSelect').value;
+            await supabase.from('competitions').update({ status: 'active' }).eq('id', compId);
+
+            const { data: qList } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
+            const currentIndex = (qList || []).findIndex(q => q.status === 'active' || q.status === 'locked' || q.status === 'countdown');
+            
+            if (currentIndex !== -1) {
+                await supabase.from('questions').update({ status: 'done' }).eq('id', qList[currentIndex].id);
+            }
+
+            const nextIndex = currentIndex === -1 ? 0 : currentIndex + 1;
+            if (!qList || nextIndex >= qList.length) {
+                alert('Dette var siste oppgave i konkurransen!');
+                loadQuestionsForCompetition(compId);
+                return;
+            }
+
+            const nextQ = qList[nextIndex];
+            await supabase.from('questions').update({ status: 'active' }).eq('id', nextQ.id);
+            loadQuestionsForCompetition(compId);
+        }
+
+        window.showTop3Modal = async function() {
+            const compId = document.getElementById('competitionSelect').value;
+            if (!compId) return;
+
+            await supabase.from('competitions').update({ status: 'top3' }).eq('id', compId);
+            generateTop3Html('🏆 Topp 3 Oversikt', compId);
+        }
+
+        window.completeCompetition = async function() {
+            if (!confirm('Vil du fullføre og avslutte hele konkurransen?')) return;
+            const compId = document.getElementById('competitionSelect').value;
+            if (!compId) return;
+
+            await supabase.from('competitions').update({ status: 'completed' }).eq('id', compId);
+            generateSluttabellHtml('🏁 Sluttresultat - Klasse mot klasse', compId);
+        }
+
+        async function generateTop3Html(title, compId) {
+            document.getElementById('modalTitle').textContent = title;
+            const contentDiv = document.getElementById('modalContent');
+            contentDiv.innerHTML = `<p class="text-slate-400 italic">Beregner poeng...</p>`;
+            document.getElementById('resultModal').classList.remove('hidden');
+
+            const html = await calculateScores(compId, true);
+            content
