@@ -353,26 +353,28 @@
         });
 
         document.getElementById('createCompBtn').addEventListener('click', async () => {
-            const title = document.getElementById('compTitle').value.trim();
-            if (!title) return;
-            const { error } = await supabase.from('competitions').insert([{ title, status: 'setup' }]);
-            if (error) { alert('Feil: ' + error.message); return; }
-            document.getElementById('compTitle').value = '';
-            initData();
-            alert('Konkurranse opprettet!');
-        });
-
-        document.getElementById('competitionSelect').addEventListener('change', async (e) => {
-            const id = e.target.value;
-            const qSection = document.getElementById('questionSection');
-            const classContainer = document.getElementById('classSelectionContainer');
+            const titleInput = document.getElementById('compTitle');
+            const title = titleInput.value.trim();
             
-            if (!id) {
-                qSection.classList.add('hidden');
-                classContainer.classList.add('hidden');
-                document.getElementById('questionListSection').classList.add('hidden');
+            console.log('Prøver å opprette konkurranse:', title); // Vises i F12 Console
+
+            if (!title) {
+                alert('Vennligst skriv inn et navn på konkurransen.');
                 return;
             }
+
+            const { data, error } = await supabase.from('competitions').insert([{ title, status: 'setup' }]);
+            
+            if (error) {
+                alert('Feil ved opprettelse: ' + error.message);
+                console.error('Supabase feil:', error);
+                return;
+            }
+
+            titleInput.value = '';
+            await initData();
+            alert('Konkurranse opprettet!');
+        });
 
             classContainer.classList.remove('hidden');
             qSection.classList.remove('hidden');
