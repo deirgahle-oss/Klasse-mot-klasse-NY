@@ -1,88 +1,72 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html>
+<!DOCTYPE html>
+<html lang="no">
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <meta http-equiv="Content-Style-Type" content="text/css">
-  <title></title>
-  <meta name="Generator" content="Cocoa HTML Writer">
-  <meta name="CocoaVersion" content="2575.7">
-  <style type="text/css">
-    p.p1 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica}
-    p.p2 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica; min-height: 14.0px}
-  </style>
+    <meta charset="UTF-8">
+    <title>Elevvisning - Klasse mot klasse</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-<p class="p1">&lt;!DOCTYPE html&gt;</p>
-<p class="p1">&lt;html lang="no"&gt;</p>
-<p class="p1">&lt;head&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;meta charset="UTF-8"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;title&gt;Elevvisning - Klasse mot klasse&lt;/title&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;script src="https://cdn.tailwindcss.com"&gt;&lt;/script&gt;</p>
-<p class="p1">&lt;/head&gt;</p>
-<p class="p1">&lt;body class="bg-slate-950 text-white min-h-screen flex flex-col items-center justify-center p-4"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;div id="loginScreen" class="w-full max-w-md bg-slate-900 p-6 rounded-2xl shadow border border-slate-800 space-y-4"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;h1 class="text-2xl font-bold text-center text-cyan-400"&gt;Klasse mot klasse&lt;/h1&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;label class="block text-sm mb-1"&gt;Ditt navn:&lt;/label&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;input type="text" id="studentName" placeholder="Skriv navnet ditt..." class="w-full p-3 rounded bg-slate-950 border border-slate-700 text-white"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;label class="block text-sm mb-1"&gt;Velg din klasse:&lt;/label&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;select id="classSelect" class="w-full p-3 rounded bg-slate-950 border border-slate-700 text-white"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>&lt;option value=""&gt;Laster klasser...&lt;/option&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;/select&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;button onclick="registerStudent()" class="w-full bg-cyan-600 hover:bg-cyan-500 py-3 rounded-xl font-bold text-lg"&gt;Bli med i spillet&lt;/button&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;/div&gt;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;div id="gameScreen" class="hidden w-full max-w-md bg-slate-900 p-6 rounded-2xl shadow border border-slate-800 text-center space-y-4"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;h2 class="text-xl font-semibold text-yellow-400" id="statusText"&gt;Venter på neste spørsmål...&lt;/h2&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;/div&gt;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;script type="module"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>import { supabase } from './supabaseClient.js';</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>async function init() {</p>
-<p class="p1"><span class="Apple-converted-space">            </span>// Hent aktiv konkurranse (vi antar den første aktive for enkelhets skyld, eller en fastsatt ID)</p>
-<p class="p1"><span class="Apple-converted-space">            </span>const { data: comps } = await supabase.from('competitions').select('*').limit(1);</p>
-<p class="p1"><span class="Apple-converted-space">            </span>if (!comps || comps.length === 0) return;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>const comp = comps[0];</p>
-<p class="p1"><span class="Apple-converted-space">            </span>window.activeCompId = comp.id;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">            </span>if (comp.active_class_ids &amp;&amp; comp.active_class_ids.length &gt; 0) {</p>
-<p class="p1"><span class="Apple-converted-space">                </span>const { data: classes } = await supabase.from('classes').select('*').in('id', comp.active_class_ids);</p>
-<p class="p1"><span class="Apple-converted-space">                </span>const select = document.getElementById('classSelect');</p>
-<p class="p1"><span class="Apple-converted-space">                </span>select.innerHTML = '&lt;option value=""&gt;-- Velg klasse --&lt;/option&gt;' + (classes || []).map(c =&gt; `</p>
-<p class="p1"><span class="Apple-converted-space">                    </span>&lt;option value="${c.name}"&gt;${c.name}&lt;/option&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>`).join('');</p>
-<p class="p1"><span class="Apple-converted-space">            </span>}</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>window.registerStudent = async function() {</p>
-<p class="p1"><span class="Apple-converted-space">            </span>const name = document.getElementById('studentName').value.trim();</p>
-<p class="p1"><span class="Apple-converted-space">            </span>const className = document.getElementById('classSelect').value;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>if (!name || !className) {</p>
-<p class="p1"><span class="Apple-converted-space">                </span>alert('Vennligst skriv navn og velg klasse.');</p>
-<p class="p1"><span class="Apple-converted-space">                </span>return;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">            </span>const { data, error } = await supabase.from('participants').insert([{</p>
-<p class="p1"><span class="Apple-converted-space">                </span>name,</p>
-<p class="p1"><span class="Apple-converted-space">                </span>class_name: className,</p>
-<p class="p1"><span class="Apple-converted-space">                </span>competition_id: window.activeCompId,</p>
-<p class="p1"><span class="Apple-converted-space">                </span>score: 0</p>
-<p class="p1"><span class="Apple-converted-space">            </span>}]).select();</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">            </span>if (!error &amp;&amp; data) {</p>
-<p class="p1"><span class="Apple-converted-space">                </span>localStorage.setItem('participant_id', data[0].id);</p>
-<p class="p1"><span class="Apple-converted-space">                </span>document.getElementById('loginScreen').classList.add('hidden');</p>
-<p class="p1"><span class="Apple-converted-space">                </span>document.getElementById('gameScreen').classList.remove('hidden');</p>
-<p class="p1"><span class="Apple-converted-space">            </span>}</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>init();</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;/script&gt;</p>
-<p class="p1">&lt;/body&gt;</p>
-<p class="p1">&lt;/html&gt;</p>
+<body class="bg-slate-950 text-white min-h-screen flex flex-col items-center justify-center p-4">
+    <div id="loginScreen" class="w-full max-w-md bg-slate-900 p-6 rounded-2xl shadow border border-slate-800 space-y-4">
+        <h1 class="text-2xl font-bold text-center text-cyan-400">Klasse mot klasse</h1>
+        <div>
+            <label class="block text-sm mb-1">Ditt navn:</label>
+            <input type="text" id="studentName" placeholder="Skriv navnet ditt..." class="w-full p-3 rounded bg-slate-950 border border-slate-700 text-white">
+        </div>
+        <div>
+            <label class="block text-sm mb-1">Velg din klasse:</label>
+            <select id="classSelect" class="w-full p-3 rounded bg-slate-950 border border-slate-700 text-white">
+                <option value="">Laster klasser...</option>
+            </select>
+        </div>
+        <button onclick="registerStudent()" class="w-full bg-cyan-600 hover:bg-cyan-500 py-3 rounded-xl font-bold text-lg">Bli med i spillet</button>
+    </div>
+
+    <div id="gameScreen" class="hidden w-full max-w-md bg-slate-900 p-6 rounded-2xl shadow border border-slate-800 text-center space-y-4">
+        <h2 class="text-xl font-semibold text-yellow-400" id="statusText">Venter på neste spørsmål...</h2>
+    </div>
+
+    <script type="module">
+        import { supabase } from './supabaseClient.js';
+
+        async function init() {
+            // Hent aktiv konkurranse (vi antar den første aktive for enkelhets skyld, eller en fastsatt ID)
+            const { data: comps } = await supabase.from('competitions').select('*').limit(1);
+            if (!comps || comps.length === 0) return;
+            const comp = comps[0];
+            window.activeCompId = comp.id;
+
+            if (comp.active_class_ids && comp.active_class_ids.length > 0) {
+                const { data: classes } = await supabase.from('classes').select('*').in('id', comp.active_class_ids);
+                const select = document.getElementById('classSelect');
+                select.innerHTML = '<option value="">-- Velg klasse --</option>' + (classes || []).map(c => `
+                    <option value="${c.name}">${c.name}</option>
+                `).join('');
+            }
+        }
+
+        window.registerStudent = async function() {
+            const name = document.getElementById('studentName').value.trim();
+            const className = document.getElementById('classSelect').value;
+            if (!name || !className) {
+                alert('Vennligst skriv navn og velg klasse.');
+                return;
+            }
+
+            const { data, error } = await supabase.from('participants').insert([{
+                name,
+                class_name: className,
+                competition_id: window.activeCompId,
+                score: 0
+            }]).select();
+
+            if (!error && data) {
+                localStorage.setItem('participant_id', data[0].id);
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('gameScreen').classList.remove('hidden');
+            }
+        }
+
+        init();
+    </script>
 </body>
 </html>
