@@ -35,9 +35,10 @@
             </div>
         </div>
 
-        <!-- Legg til Spørsmål ("Alle mot 1" oppsett) -->
+        <!-- Legg til / Rediger Spørsmål -->
         <div id="questionSection" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4 hidden">
-            <h2 class="text-xl font-semibold text-cyan-400">2. Opprett "Alle mot 1"-oppgave</h2>
+            <h2 id="formTitle" class="text-xl font-semibold text-cyan-400">2. Opprett "Alle mot 1"-oppgave</h2>
+            <input type="hidden" id="editingQuestionId" value="">
             
             <div>
                 <label class="block text-sm mb-1">Oppgavetekst:</label>
@@ -82,11 +83,11 @@
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                    <label class="block text-sm mb-1" id="labelMin">Minimum utfall (tall eller min:sek):</label>
+                    <label class="block text-sm mb-1">Minimum utfall (tall eller min:sek):</label>
                     <input type="text" id="qMin" placeholder="0 eller 0:00" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
                 </div>
                 <div>
-                    <label class="block text-sm mb-1" id="labelMax">Maksimum utfall (tall eller min:sek):</label>
+                    <label class="block text-sm mb-1">Maksimum utfall (tall eller min:sek):</label>
                     <input type="text" id="qMax" placeholder="300 eller 5:00" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
                 </div>
                 <div>
@@ -96,19 +97,17 @@
             </div>
 
             <div>
-                <label class="block text-sm mb-1">Last opp oppgavebilde:</label>
-                <input type="file" id="qImageFile" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white text-sm">
-            </div>
-
-            <div>
-                <label class="block text-sm mb-1" id="labelCorrect">Fasit (tall eller min:sek, f.eks. 1:15):</label>
+                <label class="block text-sm mb-1">Fasit (tall eller min:sek, f.eks. 1:15):</label>
                 <input type="text" id="qCorrect" placeholder="F.eks. 1:15" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
             </div>
 
-            <button id="addQuestionBtn" class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded font-bold w-full text-lg">Lagre Oppgave</button>
+            <div class="flex gap-4">
+                <button id="saveQuestionBtn" class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded font-bold flex-1 text-lg">Lagre Oppgave</button>
+                <button id="cancelEditBtn" class="bg-slate-600 hover:bg-slate-500 px-4 py-3 rounded font-bold hidden">Avbryt</button>
+            </div>
         </div>
 
-        <!-- Oversikt over opprettede spørsmål for valgt konkurranse -->
+        <!-- Oversikt over opprettede spørsmål -->
         <div id="questionListSection" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4 hidden">
             <h2 class="text-xl font-semibold text-yellow-400">3. Spørsmålsbank for denne konkurransen</h2>
             <div id="questionsContainer" class="space-y-3">
@@ -119,6 +118,8 @@
 
     <script type="module">
         import { supabase } from './supabaseClient.js';
+
+        let currentQuestions = [];
 
         async function loadCompetitions() {
             const { data: comps } = await supabase.from('competitions').select('*');
@@ -138,11 +139,9 @@
             }
         }
 
-        // Hjelpefunksjon for å gjøre om "min:sek" (f.eks. "1:30") til antall totale sekunder (90)
-        // Om det bare er et vanlig tall (f.eks. "75"), returneres det som et vanlig tall.
         function parseInputToNumber(valueStr) {
             if (!valueStr) return null;
-            valueStr = valueStr.trim();
+            valueStr = String(valueStr).trim();
             if (valueStr.includes(':')) {
                 const parts = valueStr.split(':');
                 const minutes = parseFloat(parts[0]) || 0;
@@ -152,7 +151,6 @@
             return parseFloat(valueStr);
         }
 
-        // Hjelpefunksjon for å vise sekunder pent som "min:sek" om enheten er tid
         function formatValue(val, unitType) {
             if (val === null || val === undefined) return 'Ikke satt';
             if (unitType === 'tid') {
@@ -176,6 +174,7 @@
                 .from('questions')
                 .select('*')
                 .eq('competition_id', compId)
+                .order('sort_order', { ascending: true })
                 .order('id', { ascending: true });
 
             if (error) {
@@ -183,12 +182,14 @@
                 return;
             }
 
-            if (!questions || questions.length === 0) {
+            currentQuestions = questions || [];
+
+            if (currentQuestions.length === 0) {
                 container.innerHTML = `<p class="text-slate-400 italic">Ingen oppgaver opprettet enda.</p>`;
                 return;
             }
 
-            container.innerHTML = questions.map((q, index) => {
+            container.innerHTML = currentQuestions.map((q, index) => {
                 const minFormatted = formatValue(q.min_value, q.unit_type);
                 const maxFormatted = formatValue(q.max_value, q.unit_type);
                 const correctFormatted = formatValue(q.correct_answer, q.unit_type);
@@ -196,19 +197,99 @@
 
                 return `
                     <div class="bg-slate-900 p-4 rounded border border-slate-700 flex justify-between items-center">
-                        <div>
-                            <span class="text-cyan-400 font-bold">#${index + 1}</span> 
-                            <span class="font-medium">${q.question_text}</span>
-                            <div class="text-xs text-slate-400 mt-1">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-2">
+                                <span class="text-cyan-400 font-bold">#${index + 1}</span> 
+                                <span class="font-medium text-lg">${q.question_text}</span>
+                            </div>
+                            <div class="text-xs text-slate-400">
                                 Laget av: <span class="text-yellow-300">${q.created_by_class}</span> | 
                                 Område: ${minFormatted} til ${maxFormatted} (${unitLabel}) | 
                                 Fasit: ${correctFormatted}
                             </div>
                         </div>
-                        <button onclick="deleteQuestion(${q.id})" class="bg-red-600 hover:bg-red-500 px-3 py-1 rounded text-sm font-bold">Slett</button>
+                        <div class="flex items-center gap-2">
+                            <button onclick="moveQuestion(${q.id}, 'up')" class="bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded text-sm font-bold" title="Flytt opp">⬆️</button>
+                            <button onclick="moveQuestion(${q.id}, 'down')" class="bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded text-sm font-bold" title="Flytt ned">⬇️</button>
+                            <button onclick="editQuestion(${q.id})" class="bg-amber-600 hover:bg-amber-500 px-3 py-1 rounded text-sm font-bold">Rediger</button>
+                            <button onclick="deleteQuestion(${q.id})" class="bg-red-600 hover:bg-red-500 px-3 py-1 rounded text-sm font-bold">Slett</button>
+                        </div>
                     </div>
                 `;
             }).join('');
+        }
+
+        window.moveQuestion = async function(id, direction) {
+            const index = currentQuestions.findIndex(q => q.id === id);
+            if (index === -1) return;
+
+            const targetIndex = direction === 'up' ? index - 1 : index + 1;
+            if (targetIndex < 0 || targetIndex >= currentQuestions.length) return; // Kan ikke flytte lenger opp/ned
+
+            // Bytte plass i arrayen
+            const temp = currentQuestions[index];
+            currentQuestions[index] = currentQuestions[targetIndex];
+            currentQuestions[targetIndex] = temp;
+
+            // Oppdater sort_order i databasen for begge to
+            for (let i = 0; i < currentQuestions.length; i++) {
+                await supabase.from('questions').update({ sort_order: i }).eq('id', currentQuestions[i].id);
+            }
+
+            const compId = document.getElementById('competitionSelect').value;
+            loadQuestionsForCompetition(compId);
+        }
+
+        window.editQuestion = function(id) {
+            const q = currentQuestions.find(item => item.id === id);
+            if (!q) return;
+
+            document.getElementById('editingQuestionId').value = q.id;
+            document.getElementById('formTitle').textContent = 'Rediger "Alle mot 1"-oppgave';
+            document.getElementById('saveQuestionBtn').textContent = 'Lagre Endringer';
+            document.getElementById('cancelEditBtn').classList.remove('hidden');
+
+            document.getElementById('qText').value = q.question_text;
+            document.getElementById('qCreatorClass').value = q.created_by_class;
+            document.getElementById('qUnitType').value = q.unit_type;
+            document.getElementById('qCustomUnit').value = q.custom_unit || '';
+            
+            // Formatere tall tilbake til min:sek hvis enheten er tid
+            function formatForInput(val, unitType) {
+                if (val === null || val === undefined) return '';
+                if (unitType === 'tid') {
+                    const mins = Math.floor(val / 60);
+                    const secs = Math.round(val % 60);
+                    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+                }
+                return val;
+            }
+
+            document.getElementById('qMin').value = formatForInput(q.min_value, q.unit_type);
+            document.getElementById('qMax').value = formatForInput(q.max_value, q.unit_type);
+            document.getElementById('qStep').value = q.step_value || 1;
+            document.getElementById('qCorrect').value = formatForInput(q.correct_answer, q.unit_type);
+
+            handleUnitChange();
+            window.scrollTo({ top: 300, behavior: 'smooth' });
+        }
+
+        document.getElementById('cancelEditBtn').addEventListener('click', () => {
+            resetForm();
+        });
+
+        function resetForm() {
+            document.getElementById('editingQuestionId').value = '';
+            document.getElementById('formTitle').textContent = '2. Opprett "Alle mot 1"-oppgave';
+            document.getElementById('saveQuestionBtn').textContent = 'Lagre Oppgave';
+            document.getElementById('cancelEditBtn').classList.add('hidden');
+
+            document.getElementById('qText').value = '';
+            document.getElementById('qMin').value = '';
+            document.getElementById('qMax').value = '';
+            document.getElementById('qStep').value = '1';
+            document.getElementById('qCorrect').value = '';
+            document.getElementById('qCustomUnit').value = '';
         }
 
         window.deleteQuestion = async function(id) {
@@ -241,50 +322,71 @@
             } else {
                 qSection.classList.remove('hidden');
                 loadQuestionsForCompetition(id);
+                resetForm();
             }
         });
 
-        document.getElementById('addQuestionBtn').addEventListener('click', async () => {
+        document.getElementById('saveQuestionBtn').addEventListener('click', async () => {
             const competition_id = document.getElementById('competitionSelect').value;
             const question_text = document.getElementById('qText').value.trim();
             const created_by_class = document.getElementById('qCreatorClass').value;
             const unit_type = document.getElementById('qUnitType').value;
             const custom_unit = document.getElementById('qCustomUnit').value.trim();
             
-            // Bruker helperen vår slik at f.eks. "1:30" blir til 90 sekunder i databasen
             const min_value = parseInputToNumber(document.getElementById('qMin').value);
             const max_value = parseInputToNumber(document.getElementById('qMax').value);
             const step_value = parseFloat(document.getElementById('qStep').value) || 1;
             const correct_answer = parseInputToNumber(document.getElementById('qCorrect').value);
+            const editingId = document.getElementById('editingQuestionId').value;
 
             if (!competition_id || !question_text || isNaN(min_value) || isNaN(max_value)) {
                 alert('Vennligst fyll ut oppgavetekst, minimum og maksimum utfall.');
                 return;
             }
 
-            const { error } = await supabase.from('questions').insert([{
-                competition_id,
-                question_text,
-                created_by_class,
-                unit_type,
-                custom_unit,
-                min_value,
-                max_value,
-                step_value,
-                correct_answer: isNaN(correct_answer) ? null : correct_answer,
-                status: 'pending'
-            }]);
+            if (editingId) {
+                // Oppdater eksisterende spørsmål
+                const { error } = await supabase.from('questions').update({
+                    question_text,
+                    created_by_class,
+                    unit_type,
+                    custom_unit,
+                    min_value,
+                    max_value,
+                    step_value,
+                    correct_answer: isNaN(correct_answer) ? null : correct_answer
+                }).eq('id', editingId);
 
-            if (error) {
-                alert('Feil ved lagring: ' + error.message);
-                return;
+                if (error) {
+                    alert('Feil ved oppdatering: ' + error.message);
+                    return;
+                }
+                alert('Oppgaven er oppdatert!');
+            } else {
+                // Opprett nytt spørsmål (få neste sort_order)
+                const nextOrder = currentQuestions.length;
+                const { error } = await supabase.from('questions').insert([{
+                    competition_id,
+                    question_text,
+                    created_by_class,
+                    unit_type,
+                    custom_unit,
+                    min_value,
+                    max_value,
+                    step_value,
+                    correct_answer: isNaN(correct_answer) ? null : correct_answer,
+                    status: 'pending',
+                    sort_order: nextOrder
+                }]);
+
+                if (error) {
+                    alert('Feil ved lagring: ' + error.message);
+                    return;
+                }
+                alert('Oppgaven er lagret!');
             }
 
-            alert('Oppgaven er lagret!');
-            document.getElementById('qText').value = '';
-            document.getElementById('qMin').value = '';
-            document.getElementById('qMax').value = '';
-            document.getElementById('qCorrect').value = '';
+            resetForm();
             loadQuestionsForCompetition(competition_id);
         });
 
