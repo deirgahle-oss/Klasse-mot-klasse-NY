@@ -12,7 +12,6 @@
 </head>
 <body class="bg-slate-900 text-white min-h-screen flex flex-col justify-between p-4 select-none">
 
-    <!-- Toppbar: Vis hvem som er logget inn -->
     <header class="flex justify-between items-center bg-slate-800 p-3 rounded-xl border border-slate-700">
         <div>
             <span id="loggedStudentInfo" class="font-bold text-yellow-400 text-base">-</span>
@@ -21,10 +20,9 @@
         <button onclick="changeUser()" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-slate-300 font-semibold">Bytt bruker</button>
     </header>
 
-    <!-- Hovedinnhold -->
     <main id="mainContainer" class="flex-1 flex flex-col justify-center items-center my-6 text-center">
         
-        <!-- 1. Påloggingsskjerm (Navn og Klasse) -->
+        <!-- 1. Påloggingsskjerm -->
         <div id="classSelectView" class="w-full max-w-sm space-y-4 text-left">
             <h2 class="text-2xl font-bold text-cyan-400 text-center">Velkommen til Klasse mot klasse</h2>
             <p class="text-sm text-slate-300 text-center">Skriv navnet ditt og velg klassen din for å delta:</p>
@@ -59,14 +57,17 @@
                 <h2 id="qTextDisplay" class="text-xl font-bold">Laster oppgave...</h2>
             </div>
 
-            <!-- Sperre hvis klassen har laget oppgaven -->
+            <!-- Nedtelling banner på elevskjerm -->
+            <div id="countdownBanner" class="bg-orange-600 text-white p-3 rounded-xl font-extrabold text-xl animate-pulse hidden">
+                ⏳ Tiden løper ut! Låses snart...
+            </div>
+
             <div id="blockedView" class="bg-red-900/40 border border-red-600 p-6 rounded-xl space-y-3 hidden">
                 <div class="text-4xl">🛑</div>
                 <h3 class="text-xl font-bold text-red-400">Dere har laget denne oppgaven!</h3>
-                <p class="text-sm text-slate-300">Ettersom klassen din har forfattet dette spørsmålet, kan dere ikke delta med svar på akkurat denne runden. Følg med på skjermen!</p>
+                <p class="text-sm text-slate-300">Ettersom klassen din har forfattet dette spørsmålet, kan dere ikke delta med svar på akkurat denne runden.</p>
             </div>
 
-            <!-- Målebånd-kontroller -->
             <div id="activeAnswerView" class="space-y-6">
                 <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 relative overflow-hidden shadow-2xl">
                     <div class="mb-4">
@@ -96,7 +97,7 @@
             </div>
         </div>
 
-        <!-- 4. Resultatskjerm / Topp 3 / Sluttresultat på mobil -->
+        <!-- 4. Resultatskjerm på mobil -->
         <div id="resultView" class="w-full max-w-md space-y-4 hidden text-left bg-slate-800 p-6 rounded-xl border border-slate-700">
             <h2 id="resultViewTitle" class="text-2xl font-bold text-yellow-400 text-center">🏆 Resultat</h2>
             <div id="resultViewContent" class="space-y-4 text-slate-300 max-h-[60vh] overflow-y-auto"></div>
@@ -115,7 +116,7 @@
         let currentCompId = null;
         let activeQuestion = null;
         let currentNumericValue = 0;
-        let lastKnownQuestionStatus = null;
+        let hasSubmittedCurrent = false;
 
         async function init() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -131,6 +132,11 @@
 
             if (comp) {
                 currentCompId = comp.id;
+                // Sjekk om konkurransen har status top3 eller completed
+                if (comp.status === 'top3' || comp.status === 'completed') {
+                    showResultView(comp.status === 'completed' ? '🏁 Sluttresultat' : '🏆 Topp 3 Oversikt', comp.id);
+                    return;
+                }
             }
 
             if (!myName || !myClass) {
@@ -140,8 +146,8 @@
                 document.getElementById('loggedStudentInfo').textContent = myName;
                 document.getElementById('loggedClassInfo').textContent = `Klasse: ${myClass}`;
                 showView('waitingView');
-                await fetchActiveQuestion();
-                setInterval(fetchActiveQuestion, 2500);
+                await fetchActiveState();
+                setInterval(fetchActiveState, 2000);
             }
         }
 
@@ -185,8 +191,15 @@
             document.getElementById(viewId).classList.remove('hidden');
         }
 
-        async function fetchActiveQuestion() {
+        async function fetchActiveState() {
             if (!currentCompId) return;
+
+            // Sjekk status på selve konkurransen først (viser topp 3 eller sluttresultat på elevtelefon)
+            const { data: comp } = await supabase.from('competitions').select('status').eq('id', currentCompId).single();
+            if (comp && (comp.status === 'top3' || comp.status === 'completed')) {
+                showResultView(comp.status === 'completed' ? '🏁 Sluttresultat' : '🏆 Topp 3 Oversikt', currentCompId);
+                return;
+            }
 
             const { data: questions } = await supabase.from('questions')
                 .select('*')
@@ -195,30 +208,41 @@
 
             if (!questions || questions.length === 0) return;
 
-            // Sjekk om konkurransen er ferdig eller om det vises toppliste (vi kan sjekke om alle er done eller om en aktiv/locked finnes)
-            const activeQ = questions.find(q => q.status === 'active' || q.status === 'locked');
+            const activeQ = questions.find(q => q.status === 'active' || q.status === 'locked' || q.status === 'countdown');
 
             if (!activeQ) {
-                // Ingen aktive oppgaver. Hvis vi nettopp var på et spørsmål som ble låst, vis venteskjerm eller resultat
-                if (document.getElementById('questionView').classList.contains('hidden') === false && lastKnownQuestionStatus === 'locked') {
-                    // Vis en melding om at oppgaven er ferdig
-                    document.getElementById('lockStatusText').textContent = "Tiden er ute! Venter på neste oppgave eller toppliste fra arrangør...";
+                if (document.getElementById('questionView').classList.contains('hidden') === false) {
+                    showView('waitingView');
                 }
                 return;
             }
 
-            lastKnownQuestionStatus = activeQ.status;
-
             if (!activeQuestion || activeQuestion.id !== activeQ.id) {
                 activeQuestion = activeQ;
+                hasSubmittedCurrent = false;
                 setupQuestionUI(activeQ);
             } else if (activeQuestion.status !== activeQ.status) {
-                // Status har endret seg (f.eks. fra active til locked)
                 activeQuestion.status = activeQ.status;
-                if (activeQ.status === 'locked') {
-                    document.getElementById('activeAnswerView').classList.add('hidden');
-                    document.getElementById('submittedConfirmView').classList.remove('hidden');
-                    document.getElementById('lockStatusText').textContent = "Tiden er ute! Svarene er låst av arrangør.";
+                
+                if (activeQ.status === 'countdown') {
+                    document.getElementById('countdownBanner').classList.remove('hidden');
+                } else if (activeQ.status === 'locked') {
+                    document.getElementById('countdownBanner').classList.add('hidden');
+                    
+                    // Automatisk innsending hvis brukeren ikke har trykket "lås inn" enda
+                    if (!hasSubmittedCurrent && activeQ.created_by_class !== myClass) {
+                        await autoSubmitAnswer();
+                    } else {
+                        document.getElementById('activeAnswerView').classList.add('hidden');
+                        document.getElementById('submittedConfirmView').classList.remove('hidden');
+                        document.getElementById('lockStatusText').textContent = "Tiden er ute! Svarene er låst.";
+                    }
+                } else if (activeQ.status === 'active') {
+                    document.getElementById('countdownBanner').classList.add('hidden');
+                    if (!hasSubmittedCurrent) {
+                        document.getElementById('activeAnswerView').classList.remove('hidden');
+                        document.getElementById('submittedConfirmView').classList.add('hidden');
+                    }
                 }
             }
         }
@@ -231,6 +255,9 @@
             const blockedView = document.getElementById('blockedView');
             const activeAnswerView = document.getElementById('activeAnswerView');
             const submittedConfirmView = document.getElementById('submittedConfirmView');
+            const countdownBanner = document.getElementById('countdownBanner');
+
+            countdownBanner.classList.add('hidden');
 
             if (q.created_by_class === myClass) {
                 blockedView.classList.remove('hidden');
@@ -255,14 +282,12 @@
         function buildRuler(min, max, step, unitType, customUnit) {
             const track = document.getElementById('rulerTrack');
             track.innerHTML = '';
-
             const unitLabel = unitType === 'tid' ? 'sek' : (customUnit || unitType);
             document.getElementById('unitDisplay').textContent = unitLabel;
 
             for (let val = min; val <= max; val += step) {
                 const tick = document.createElement('div');
                 tick.className = 'flex flex-col items-center justify-end h-12 min-w-[40px] cursor-pointer';
-                
                 const displayValStr = unitType === 'tid' ? formatTime(val) : val;
 
                 tick.innerHTML = `
@@ -270,15 +295,12 @@
                     <div class="w-0.5 bg-slate-600 h-6"></div>
                 `;
                 tick.dataset.value = val;
-                
-                tick.onclick = () => {
-                    scrollToValue(val, min, max, step);
-                };
-
+                tick.onclick = () => { scrollToValue(val, min, max, step); };
                 track.appendChild(tick);
             }
 
             const midVal = (min + max) / 2;
+            currentNumericValue = midVal;
             scrollToValue(midVal, min, max, step);
         }
 
@@ -289,7 +311,6 @@
             if (ticks.length === 0) return;
 
             const containerCenter = container.scrollLeft + (container.clientWidth / 2);
-            
             let closestVal = parseFloat(ticks[0].dataset.value);
             let minDistance = Infinity;
 
@@ -324,22 +345,118 @@
 
         window.submitAnswer = async function() {
             if (!myName || !myClass || !activeQuestion) return;
+            hasSubmittedCurrent = true;
 
-            const { error } = await supabase.from('answers').insert([{
+            await supabase.from('answers').insert([{
                 question_id: activeQuestion.id,
                 class_name: myClass,
                 student_name: myName,
                 answer_value: currentNumericValue
             }]);
 
-            if (error) {
-                alert('Feil ved innsending av svar: ' + error.message);
-                return;
-            }
+            document.getElementById('activeAnswerView').classList.add('hidden');
+            document.getElementById('submittedConfirmView').classList.remove('hidden');
+            document.getElementById('lockStatusText').textContent = "Svaret ditt er låst inn!";
+        }
+
+        async function autoSubmitAnswer() {
+            if (!myName || !myClass || !activeQuestion) return;
+            hasSubmittedCurrent = true;
+
+            await supabase.from('answers').insert([{
+                question_id: activeQuestion.id,
+                class_name: myClass,
+                student_name: myName,
+                answer_value: currentNumericValue
+            }]);
 
             document.getElementById('activeAnswerView').classList.add('hidden');
             document.getElementById('submittedConfirmView').classList.remove('hidden');
-            document.getElementById('lockStatusText').textContent = "Svaret ditt er låst inn! Følg med på skjermen.";
+            document.getElementById('lockStatusText').textContent = "Tiden gikk ut! Din gjeldende posisjon ble automatisk låst som svar.";
+        }
+
+        async function showResultView(title, compId) {
+            showView('resultView');
+            document.getElementById('resultViewTitle').textContent = title;
+            const contentDiv = document.getElementById('resultViewContent');
+            contentDiv.innerHTML = `<p class="text-slate-400 italic">Henter resultater...</p>`;
+
+            const isTop3 = title.includes('Topp 3');
+            const html = await calculateScoresForMobile(compId, isTop3);
+            contentDiv.innerHTML = html;
+        }
+
+        async function calculateScoresForMobile(compId, top3Only) {
+            const { data: questions } = await supabase.from('questions').select('*').eq('competition_id', compId);
+            if (!questions || questions.length === 0) return `<p>Ingen oppgaver funnet.</p>`;
+
+            const qIds = questions.map(q => q.id);
+            const { data: answers } = await supabase.from('answers').select('*').in('question_id', qIds);
+            if (!answers || answers.length === 0) return `<p>Ingen svar registrert.</p>`;
+
+            const qMap = {};
+            questions.forEach(q => { qMap[q.id] = q; });
+
+            const studentStats = {}; 
+            const classStats = {};   
+
+            answers.forEach(a => {
+                const q = qMap[a.question_id];
+                if (!q || q.correct_answer === null || q.correct_answer === undefined) return;
+
+                const diff = Math.abs(Number(a.answer_value) - Number(q.correct_answer));
+                const studentKey = `${a.student_name}_${a.class_name}`;
+
+                if (!studentStats[studentKey]) {
+                    studentStats[studentKey] = { name: a.student_name, className: a.class_name, totalDiff: 0, count: 0 };
+                }
+                studentStats[studentKey].totalDiff += diff;
+                studentStats[studentKey].count += 1;
+
+                if (!classStats[a.class_name]) {
+                    classStats[a.class_name] = { totalDiff: 0, totalCount: 0 };
+                }
+                classStats[a.class_name].totalDiff += diff;
+                classStats[a.class_name].totalCount += 1;
+            });
+
+            const studentArray = Object.values(studentStats).map(s => ({
+                name: s.name, className: s.className, avgDiff: s.count > 0 ? s.totalDiff / s.count : 0
+            })).sort((a, b) => a.avgDiff - b.avgDiff);
+
+            const classArray = Object.keys(classStats).map(className => {
+                const c = classStats[className];
+                return { className, avgDiff: c.totalCount > 0 ? c.totalDiff / c.totalCount : 999999 };
+            }).sort((a, b) => a.avgDiff - b.avgDiff);
+
+            let html = `<div class="space-y-6">`;
+            
+            html += `<div><h4 class="text-lg font-bold text-cyan-400 mb-2 border-b border-slate-700 pb-1">⭐ ${top3Only ? 'Topp 3' : 'Alle'} Enkeltelever</h4>`;
+            const studentSlice = top3Only ? studentArray.slice(0, 3) : studentArray;
+            studentSlice.forEach((st, idx) => {
+                const medals = ['🥇', '🥈', '🥉'];
+                const rankPrefix = idx < 3 ? medals[idx] : `#${idx + 1}`;
+                html += `<div class="bg-slate-900 p-2.5 rounded flex justify-between items-center border border-slate-700 mb-1.5 text-sm">
+                    <span class="font-bold">${rankPrefix} ${st.name} <span class="text-xs text-slate-400 font-normal">(${st.className})</span></span>
+                    <span class="text-xs text-yellow-400 font-mono">Snitt avvik: ${st.avgDiff.toFixed(1)}</span>
+                </div>`;
+            });
+            html += `</div>`;
+
+            html += `<div><h4 class="text-lg font-bold text-yellow-300 mb-2 border-b border-slate-700 pb-1">🏫 ${top3Only ? 'Topp 3' : 'Alle'} Klasser</h4>`;
+            const classSlice = top3Only ? classArray.slice(0, 3) : classArray;
+            classSlice.forEach((cl, idx) => {
+                const medals = ['🥇', '🥈', '🥉'];
+                const rankPrefix = idx < 3 ? medals[idx] : `#${idx + 1}`;
+                html += `<div class="bg-slate-900 p-2.5 rounded flex justify-between items-center border border-slate-700 mb-1.5 text-sm">
+                    <span class="font-bold">${rankPrefix} ${cl.className}</span>
+                    <span class="text-xs text-emerald-400 font-mono">Snitt avvik: ${cl.avgDiff.toFixed(1)}</span>
+                </div>`;
+            });
+            html += `</div>`;
+
+            html += `</div>`;
+            return html;
         }
 
         init();
