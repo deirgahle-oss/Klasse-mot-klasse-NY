@@ -1,6 +1,6 @@
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
 
-const SUPABASE_URL = 'https://DIN-PROSJEKT-REF.supabase.co';
-const SUPABASE_ANON_KEY = 'DIN-ANON-KEY';
+const supabaseUrl = 'DIN_SUPABASE_URL'
+const supabaseKey = 'DIN_SUPABASE_ANON_KEY'
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export const supabase = createClient(supabaseUrl, supabaseKey)
