@@ -73,15 +73,16 @@
                     <div class="mb-4">
                         <span class="text-xs text-slate-400 uppercase tracking-widest block">Ditt svar</span>
                         <span id="currentValDisplay" class="text-4xl font-extrabold text-cyan-400">0</span>
-                        <span id="unitDisplay" class="text-sm text-slate-400 font-semibold ml-1">sekunder</span>
+                        <!-- Enhetsteksten er fjernet her slik at det kun vises verdi/tidspunkt -->
                     </div>
 
                     <div class="relative w-full h-24 bg-slate-900 rounded-lg overflow-hidden border border-slate-700 flex items-center">
                         <div class="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-1 bg-yellow-400 z-10 pointer-events-none shadow-[0_0_10px_#facc15]"></div>
                         <div class="absolute left-1/2 -translate-x-1/2 -top-1 w-3 h-3 bg-yellow-400 rotate-45 z-10 pointer-events-none"></div>
 
+                        <!-- Doblet tetthet på hakkene (min-w-[15px]) -->
                         <div id="rulerContainer" class="w-full overflow-x-auto no-scrollbar px-[50%] flex items-center h-full cursor-grab active:cursor-grabbing" onscroll="handleRulerScroll()">
-                            <div id="rulerTrack" class="flex items-center gap-6 h-full text-xs text-slate-500 font-mono"></div>
+                            <div id="rulerTrack" class="flex items-center gap-4 h-full text-xs text-slate-500 font-mono"></div>
                         </div>
                     </div>
                     <p class="text-xs text-slate-400 mt-2">Dra målebåndet sideveis for å velge svar</p>
@@ -155,12 +156,9 @@
 
         async function loadAllowedClassesForDropdown(comp) {
             let activeClasses = [];
-
-            // Bruk KUN klasser som er spesifikt krysset av for denne konkurransen
             if (comp && comp.active_class_names && comp.active_class_names.length > 0) {
                 activeClasses = comp.active_class_names;
             } else {
-                // Fallback hvis ingen er lagret enda: hent alle klasser fra databasen
                 const { data } = await supabase.from('classes').select('*').order('name');
                 activeClasses = (data || []).map(c => c.name);
             }
@@ -248,7 +246,7 @@
                         let fasitText = "";
                         if (activeQ.correct_answer !== null && activeQ.correct_answer !== undefined) {
                             const formattedCorrect = activeQ.unit_type === 'tid' ? formatTime(activeQ.correct_answer) : activeQ.correct_answer;
-                            fasitText = `<br><strong class="text-yellow-400">Fasit: ${formattedCorrect} ${activeQ.unit_type === 'tid' ? 'sek' : (activeQ.custom_unit || activeQ.unit_type)}</strong>`;
+                            fasitText = `<br><strong class="text-yellow-400">Fasit: ${formattedCorrect}</strong>`;
                         } else {
                             fasitText = `<br><span class="text-amber-400 italic">Vi venter på at fasiten registreres...</span>`;
                         }
@@ -307,7 +305,7 @@
                     let fasitText = "";
                     if (q.correct_answer !== null && q.correct_answer !== undefined) {
                         const formattedCorrect = q.unit_type === 'tid' ? formatTime(q.correct_answer) : q.correct_answer;
-                        fasitText = `<br><strong class="text-yellow-400">Fasit: ${formattedCorrect} ${q.unit_type === 'tid' ? 'sek' : (q.custom_unit || q.unit_type)}</strong>`;
+                        fasitText = `<br><strong class="text-yellow-400">Fasit: ${formattedCorrect}</strong>`;
                     } else {
                         fasitText = `<br><span class="text-amber-400 italic">Vi venter på at fasiten registreres...</span>`;
                     }
@@ -322,18 +320,16 @@
                 }
             }
 
-            buildRuler(q.min_value, q.max_value, q.step_value, q.unit_type, q.custom_unit);
+            buildRuler(q.min_value, q.max_value, q.step_value, q.unit_type);
         }
 
-        function buildRuler(min, max, step, unitType, customUnit) {
+        function buildRuler(min, max, step, unitType) {
             const track = document.getElementById('rulerTrack');
             track.innerHTML = '';
-            const unitLabel = unitType === 'tid' ? 'sek' : (customUnit || unitType);
-            document.getElementById('unitDisplay').textContent = unitLabel;
 
             for (let val = min; val <= max; val += step) {
                 const tick = document.createElement('div');
-                tick.className = 'flex flex-col items-center justify-end h-12 min-w-[30px] cursor-pointer';
+                tick.className = 'flex flex-col items-center justify-end h-12 min-w-[15px] cursor-pointer'; // Tettere hakk
                 const displayValStr = unitType === 'tid' ? formatTime(val) : val;
 
                 tick.innerHTML = `
@@ -451,30 +447,40 @@
                 const q = qMap[a.question_id];
                 if (!q || q.correct_answer === null || q.correct_answer === undefined) return;
 
-                const diff = Math.abs(Number(a.answer_value) - Number(q.correct_answer));
-                const studentKey = `${a.student_name}_${a.class_name}`;
-
-                if (!studentStats[studentKey]) {
-                    studentStats[studentKey] = { name: a.student_name, className: a.class_name, totalDiff: 0, count: 0 };
+                const fasit = Number(q.correct_answer);
+                const svar = Number(a.answer_value);
+                const diff = Math.abs(svar - fasit);
+                
+                let score = 0;
+                if (fasit === 0) {
+                    score = diff === 0 ? 100 : Math.max(0, 100 - diff * 10);
+                } else {
+                    const relError = diff / Math.abs(fasit);
+                    score = Math.max(0, 100 * Math.exp(-3 * relError)); 
                 }
-                studentStats[studentKey].totalDiff += diff;
+
+                const studentKey = `${a.student_name}_${a.class_name}`;
+                if (!studentStats[studentKey]) {
+                    studentStats[studentKey] = { name: a.student_name, className: a.class_name, totalScore: 0, count: 0 };
+                }
+                studentStats[studentKey].totalScore += score;
                 studentStats[studentKey].count += 1;
 
                 if (!classStats[a.class_name]) {
-                    classStats[a.class_name] = { totalDiff: 0, totalCount: 0 };
+                    classStats[a.class_name] = { totalScore: 0, totalCount: 0 };
                 }
-                classStats[a.class_name].totalDiff += diff;
+                classStats[a.class_name].totalScore += score;
                 classStats[a.class_name].totalCount += 1;
             });
 
             const studentArray = Object.values(studentStats).map(s => ({
-                name: s.name, className: s.className, avgDiff: s.count > 0 ? s.totalDiff / s.count : 0
-            })).sort((a, b) => a.avgDiff - b.avgDiff);
+                name: s.name, className: s.className, avgScore: s.count > 0 ? s.totalScore / s.count : 0
+            })).sort((a, b) => b.avgScore - a.avgScore);
 
             const classArray = Object.keys(classStats).map(className => {
                 const c = classStats[className];
-                return { className, avgDiff: c.totalCount > 0 ? c.totalDiff / c.totalCount : 999999 };
-            }).sort((a, b) => a.avgDiff - b.avgDiff);
+                return { className, avgScore: c.totalCount > 0 ? c.totalScore / c.totalCount : 0 };
+            }).sort((a, b) => b.avgScore - a.avgScore);
 
             let html = `<div class="space-y-6">`;
             
@@ -485,7 +491,7 @@
                 const rankPrefix = idx < 3 ? medals[idx] : `#${idx + 1}`;
                 html += `<div class="bg-slate-900 p-2.5 rounded flex justify-between items-center border border-slate-700 mb-1.5 text-sm">
                     <span class="font-bold">${rankPrefix} ${st.name} <span class="text-xs text-slate-400 font-normal">(${st.className})</span></span>
-                    <span class="text-xs text-yellow-400 font-mono">Snitt avvik: ${st.avgDiff.toFixed(1)}</span>
+                    <span class="text-xs text-yellow-400 font-mono">Poengsnitt: ${st.avgScore.toFixed(1)} p</span>
                 </div>`;
             });
             html += `</div>`;
@@ -497,7 +503,7 @@
                 const rankPrefix = idx < 3 ? medals[idx] : `#${idx + 1}`;
                 html += `<div class="bg-slate-900 p-2.5 rounded flex justify-between items-center border border-slate-700 mb-1.5 text-sm">
                     <span class="font-bold">${rankPrefix} ${cl.className}</span>
-                    <span class="text-xs text-emerald-400 font-mono">Klassesnitt avvik: ${cl.avgDiff.toFixed(1)}</span>
+                    <span class="text-xs text-emerald-400 font-mono">Klassesnitt: ${cl.avgScore.toFixed(1)} p</span>
                 </div>`;
             });
             html += `</div>`;
