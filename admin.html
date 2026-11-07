@@ -164,11 +164,27 @@
             allClasses = classesData || [];
             updateCreatorClassDropdown();
 
-            const { data: comps } = await supabase.from('competitions').select('*');
+            await loadCompetitionsDropdown();
+        }
+
+        async function loadCompetitionsDropdown() {
             const select = document.getElementById('competitionSelect');
+            const savedCompId = localStorage.getItem('kmk_active_comp_id');
+
+            const { data: comps, error } = await supabase.from('competitions').select('*').order('id', { ascending: false });
+            if (error) {
+                console.error('Feil ved henting av konkurranser:', error);
+                return;
+            }
+
             select.innerHTML = '<option value="">-- Velg konkurranse --</option>' + (comps || []).map(co => `
-                <option value="${co.id}">${co.title}</option>
+                <option value="${co.id}">${co.title} (Status: ${co.status})</option>
             `).join('');
+
+            if (savedCompId && select.querySelector(`option[value="${savedCompId}"]`)) {
+                select.value = savedCompId;
+                loadQuestionsForCompetition(savedCompId);
+            }
         }
 
         function updateCreatorClassDropdown() {
@@ -337,7 +353,6 @@
         window.startKlasseMotKlasse = async function() {
             const compId = document.getElementById('competitionSelect').value;
             if (!compId || currentQuestions.length === 0) return;
-            // Nullstill konkurranse-status
             await supabase.from('competitions').update({ status: 'active' }).eq('id', compId);
 
             const firstQ = currentQuestions[0];
@@ -378,8 +393,6 @@
 
         window.nextQuestion = async function() {
             const compId = document.getElementById('competitionSelect').value;
-            
-            // Nullstill konkurranse-status slik at elevtelefoner går ut av toppliste-modus
             await supabase.from('competitions').update({ status: 'active' }).eq('id', compId);
 
             const { data: qList } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
@@ -527,10 +540,19 @@
             document.getElementById('qCreatorClass').value = q.created_by_class;
             document.getElementById('qUnitType').value = q.unit_type;
             document.getElementById('qCustomUnit').value = q.custom_unit || '';
-            document.getElementById('qMin').value = q.min_value;
-            document.getElementById('qMax').value = q.max_value;
+            
+            // Konverter fra sekunder til min:sek ved redigering hvis enheten er tid
+            if (q.unit_type === 'tid') {
+                document.getElementById('qMin').value = formatSecondsToInput(q.min_value);
+                document.getElementById('qMax').value = formatSecondsToInput(q.max_value);
+                document.getElementById('qCorrect').value = q.correct_answer !== null ? formatSecondsToInput(q.correct_answer) : '';
+            } else {
+                document.getElementById('qMin').value = q.min_value;
+                document.getElementById('qMax').value = q.max_value;
+                document.getElementById('qCorrect').value = q.correct_answer !== null ? q.correct_answer : '';
+            }
+
             document.getElementById('qStep').value = q.step_value || 1;
-            document.getElementById('qCorrect').value = q.correct_answer !== null ? q.correct_answer : '';
             window.scrollTo({ top: 300, behavior: 'smooth' });
         }
 
@@ -558,7 +580,13 @@
         });
 
         document.getElementById('competitionSelect').addEventListener('change', (e) => {
-            loadQuestionsForCompetition(e.target.value);
+            const compId = e.target.value;
+            if (compId) {
+                localStorage.setItem('kmk_active_comp_id', compId);
+            } else {
+                localStorage.removeItem('kmk_active_comp_id');
+            }
+            loadQuestionsForCompetition(compId);
         });
 
         document.getElementById('saveCompClassesBtn').addEventListener('click', async () => {
@@ -575,7 +603,6 @@
             const unit_type = document.getElementById('qUnitType').value;
             const custom_unit = document.getElementById('qCustomUnit').value.trim();
             
-            // Hent verdier og konverter fra min:sek til sekunder hvis enheten er 'tid'
             const rawMin = document.getElementById('qMin').value;
             const rawMax = document.getElementById('qMax').value;
             const rawCorrect = document.getElementById('qCorrect').value;
@@ -584,7 +611,6 @@
             const max_value = unit_type === 'tid' ? parseInputToSeconds(rawMax) : parseFloat(rawMax);
             const step_value = parseFloat(document.getElementById('qStep').value) || 1;
             const correct_answer = unit_type === 'tid' ? parseInputToSeconds(rawCorrect) : parseFloat(rawCorrect);
-            
             const editingId = document.getElementById('editingQuestionId').value;
 
             if (!competition_id || !question_text || isNaN(min_value) || isNaN(max_value)) {
@@ -615,7 +641,13 @@
             loadQuestionsForCompetition(competition_id);
         });
 
-        // Hjelpefunksjon for å gjøre om min:sek (f.eks. "30:00") til totalt antall sekunder (f.eks. 1800)
+        document.getElementById('cancelEditBtn').addEventListener('click', () => {
+            document.getElementById('editingQuestionId').value = '';
+            document.getElementById('formTitle').textContent = '2. Opprett oppgave';
+            document.getElementById('saveQuestionBtn').textContent = 'Lagre Oppgave';
+            document.getElementById('cancelEditBtn').classList.add('hidden');
+        });
+
         function parseInputToSeconds(valueStr) {
             if (!valueStr && valueStr !== 0) return null;
             valueStr = String(valueStr).trim();
@@ -626,24 +658,11 @@
             return parseFloat(valueStr);
         }
 
-            document.getElementById('editingQuestionId').value = '';
-            document.getElementById('formTitle').textContent = '2. Opprett oppgave';
-            document.getElementById('saveQuestionBtn').textContent = 'Lagre Oppgave';
-            document.getElementById('cancelEditBtn').classList.add('hidden');
-            document.getElementById('qText').value = '';
-            document.getElementById('qMin').value = '';
-            document.getElementById('qMax').value = '';
-            document.getElementById('qCorrect').value = '';
-
-            loadQuestionsForCompetition(competition_id);
-        });
-
-        document.getElementById('cancelEditBtn').addEventListener('click', () => {
-            document.getElementById('editingQuestionId').value = '';
-            document.getElementById('formTitle').textContent = '2. Opprett oppgave';
-            document.getElementById('saveQuestionBtn').textContent = 'Lagre Oppgave';
-            document.getElementById('cancelEditBtn').classList.add('hidden');
-        });
+        function formatSecondsToInput(totalSeconds) {
+            const mins = Math.floor(totalSeconds / 60);
+            const secs = Math.round(totalSeconds % 60);
+            return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        }
 
         initData();
     </script>
