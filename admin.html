@@ -70,9 +70,7 @@
 
             <div class="border-t border-slate-700 pt-4">
                 <h3 class="text-md font-semibold text-yellow-300 mb-2">👥 Påmeldte deltakere i denne konkurransen</h3>
-                <div id="participantsListContainer" class="max-h-40 overflow-y-auto space-y-2 bg-slate-900 p-3 rounded border border-slate-700">
-                    <!-- Fylles dynamisk -->
-                </div>
+                <div id="participantsListContainer" class="max-h-40 overflow-y-auto space-y-2 bg-slate-900 p-3 rounded border border-slate-700"></div>
             </div>
         </div>
 
@@ -144,7 +142,7 @@
         </div>
     </div>
 
-    <!-- Modal for Topp 3 / Resultat -->
+    <!-- Modal -->
     <div id="resultModal" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
         <div class="bg-slate-800 border border-slate-700 rounded-xl max-w-xl w-full p-6 space-y-6 max-h-[85vh] overflow-y-auto">
             <h3 id="modalTitle" class="text-2xl font-bold text-yellow-400">Resultat</h3>
@@ -210,7 +208,6 @@
                 return;
             }
 
-            // Sørg for at både spørsmålsbanken og skjemaet for å opprette oppgaver vises
             section.classList.remove('hidden');
             questionFormSec.classList.remove('hidden');
             document.getElementById('liveControlSection').classList.remove('hidden');
@@ -267,7 +264,6 @@
         }
 
         async function fetchLiveMetrics(questionId, compId) {
-            // Hent svar
             const { data: answers } = await supabase.from('answers').select('class_name').eq('question_id', questionId);
             const countBox = document.getElementById('answersCountPerClassList');
             const counts = {};
@@ -284,16 +280,10 @@
                 `;
             }).join('');
 
-            // Hent deltakere for denne konkurransen for sletting
-            const { data: parts } = await supabase.from('answers').select('id, student_name, class_name').eq('question_id', questionId);
-            // Eller unike deltakere basert på navn og klasse i databasen
-            const { data: allAnswers } = await supabase.from('answers').select('student_name, class_name, question_id');
-            // Vi kan hente endistinkte studenter
             renderParticipantsList(compId);
         }
 
         async function renderParticipantsList(compId) {
-            // Hent alle svar i denne konkurransen for å finne hvem som har deltatt
             const { data: questions } = await supabase.from('questions').select('id').eq('competition_id', compId);
             if (!questions || questions.length === 0) return;
             const qIds = questions.map(q => q.id);
@@ -301,7 +291,6 @@
             const { data: answers } = await supabase.from('answers').select('*').in('question_id', qIds);
             const container = document.getElementById('participantsListContainer');
 
-            // Unike deltakere (navn + klasse)
             const uniqueMap = {};
             (answers || []).forEach(a => {
                 if (a.student_name) {
@@ -345,10 +334,12 @@
             loadQuestionsForCompetition(document.getElementById('competitionSelect').value);
         }
 
-        // --- LIVE SPILLKONTROLLER MED NEDTELLING ---
         window.startKlasseMotKlasse = async function() {
             const compId = document.getElementById('competitionSelect').value;
             if (!compId || currentQuestions.length === 0) return;
+            // Nullstill konkurranse-status
+            await supabase.from('competitions').update({ status: 'active' }).eq('id', compId);
+
             const firstQ = currentQuestions[0];
             await supabase.from('questions').update({ status: 'active' }).eq('id', firstQ.id);
             loadQuestionsForCompetition(compId);
@@ -364,7 +355,6 @@
                 return;
             }
 
-            // Sett status til countdown slik at telefonene teller ned
             await supabase.from('questions').update({ status: 'countdown' }).eq('id', activeQ.id);
 
             for (let i = 5; i > 0; i--) {
@@ -372,7 +362,6 @@
                 await new Promise(r => setTimeout(r, 1000));
             }
 
-            // Når tiden er ute, sett til locked
             await supabase.from('questions').update({ status: 'locked' }).eq('id', activeQ.id);
             loadQuestionsForCompetition(compId);
         }
@@ -389,6 +378,10 @@
 
         window.nextQuestion = async function() {
             const compId = document.getElementById('competitionSelect').value;
+            
+            // Nullstill konkurranse-status slik at elevtelefoner går ut av toppliste-modus
+            await supabase.from('competitions').update({ status: 'active' }).eq('id', compId);
+
             const { data: qList } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
             const currentIndex = (qList || []).findIndex(q => q.status === 'active' || q.status === 'locked' || q.status === 'countdown');
             
@@ -412,10 +405,7 @@
             const compId = document.getElementById('competitionSelect').value;
             if (!compId) return;
 
-            // Sett konkurranse status til 'top3' slik at telefonene viser det også
             await supabase.from('competitions').update({ status: 'top3' }).eq('id', compId);
-
-            // Generer lokal modalvisning
             generateTop3Html('🏆 Topp 3 Oversikt', compId);
         }
 
@@ -483,24 +473,17 @@
             });
 
             const studentArray = Object.values(studentStats).map(s => ({
-                name: s.name,
-                className: s.className,
-                avgDiff: s.count > 0 ? s.totalDiff / s.count : 0
+                name: s.name, className: s.className, avgDiff: s.count > 0 ? s.totalDiff / s.count : 0
             })).sort((a, b) => a.avgDiff - b.avgDiff);
 
             const classArray = Object.keys(classStats).map(className => {
                 const c = classStats[className];
-                return {
-                    className,
-                    avgDiff: c.totalCount > 0 ? c.totalDiff / c.totalCount : 999999
-                };
+                return { className, avgDiff: c.totalCount > 0 ? c.totalDiff / c.totalCount : 999999 };
             }).sort((a, b) => a.avgDiff - b.avgDiff);
 
             let html = `<div class="space-y-6">`;
             
-            // Topp elever
-            html += `<div>
-                <h4 class="text-lg font-bold text-cyan-400 mb-2 border-b border-slate-700 pb-1">⭐ ${top3Only ? 'Topp 3' : 'Alle'} Enkeltelever</h4>`;
+            html += `<div><h4 class="text-lg font-bold text-cyan-400 mb-2 border-b border-slate-700 pb-1">⭐ ${top3Only ? 'Topp 3' : 'Alle'} Enkeltelever</h4>`;
             const studentSlice = top3Only ? studentArray.slice(0, 3) : studentArray;
             studentSlice.forEach((st, idx) => {
                 const medals = ['🥇', '🥈', '🥉'];
@@ -512,9 +495,7 @@
             });
             html += `</div>`;
 
-            // Topp klasser
-            html += `<div>
-                <h4 class="text-lg font-bold text-yellow-300 mb-2 border-b border-slate-700 pb-1">🏫 ${top3Only ? 'Topp 3' : 'Alle'} Klasser (Klassesnitt)</h4>`;
+            html += `<div><h4 class="text-lg font-bold text-yellow-300 mb-2 border-b border-slate-700 pb-1">🏫 ${top3Only ? 'Topp 3' : 'Alle'} Klasser (Klassesnitt)</h4>`;
             const classSlice = top3Only ? classArray.slice(0, 3) : classArray;
             classSlice.forEach((cl, idx) => {
                 const medals = ['🥇', '🥈', '🥉'];
@@ -616,7 +597,6 @@
                 }]);
             }
 
-            // Nullstill skjema og last oppgaver på nytt
             document.getElementById('editingQuestionId').value = '';
             document.getElementById('formTitle').textContent = '2. Opprett oppgave';
             document.getElementById('saveQuestionBtn').textContent = 'Lagre Oppgave';
