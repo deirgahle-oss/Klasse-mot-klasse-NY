@@ -14,14 +14,12 @@
             <h2 class="text-xl font-semibold text-cyan-400">1. Administrer Konkurranse & Klasser</h2>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Opprett konkurranse -->
                 <div class="bg-slate-900 p-4 rounded border border-slate-700">
                     <label class="block text-sm mb-1 font-semibold">Opprett ny konkurranse:</label>
                     <input type="text" id="compTitle" placeholder="F.eks. Klasse mot klasse - Vår 2026" class="w-full p-2 rounded bg-slate-800 border border-slate-600 text-white mb-2">
                     <button id="createCompBtn" class="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded font-bold w-full">Opprett Konkurranse</button>
                 </div>
 
-                <!-- Legg til ny klasse i systemet -->
                 <div class="bg-slate-900 p-4 rounded border border-slate-700">
                     <label class="block text-sm mb-1 font-semibold">Legg til ny klasse i systemet:</label>
                     <div class="flex gap-2">
@@ -38,13 +36,27 @@
                 </select>
             </div>
 
-            <!-- Avhukingsliste for klasser som deltar i valgt konkurranse -->
             <div id="classSelectionContainer" class="hidden pt-4 border-t border-slate-700 space-y-3">
                 <h3 class="text-md font-semibold text-yellow-300">Velg hvilke klasser som deltar i denne konkurransen:</h3>
-                <div id="classListCheckboxes" class="grid grid-cols-2 md:grid-cols-3 gap-3 bg-slate-900 p-4 rounded border border-slate-700">
-                    <!-- Huker fylles inn dynamisk -->
-                </div>
+                <div id="classListCheckboxes" class="grid grid-cols-2 md:grid-cols-3 gap-3 bg-slate-900 p-4 rounded border border-slate-700"></div>
                 <button id="saveCompClassesBtn" class="bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded font-bold text-black">Lagre deltakende klasser</button>
+            </div>
+        </div>
+
+        <!-- LIVE KONTROLLER (De nye knappene) -->
+        <div id="liveControlSection" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4 hidden">
+            <h2 class="text-xl font-semibold text-emerald-400">🎮 Live Spillkontroller</h2>
+            <div id="activeLiveStatus" class="text-sm bg-slate-900 p-3 rounded border border-slate-700 text-slate-300">
+                Status: Ingen aktiv oppgave pågår.
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <button onclick="startKlasseMotKlasse()" class="bg-cyan-600 hover:bg-cyan-500 p-3 rounded font-bold text-sm shadow">🚀 Start klasse mot klasse</button>
+                <button onclick="lockAnswersCountdown()" class="bg-amber-600 hover:bg-amber-500 p-3 rounded font-bold text-sm shadow">⏳ Lås svar - 5 sekunder igjen</button>
+                <button onclick="openAnswersAgain()" class="bg-blue-600 hover:bg-blue-500 p-3 rounded font-bold text-sm shadow">🔓 Åpne svar</button>
+                <button onclick="nextQuestion()" class="bg-emerald-600 hover:bg-emerald-500 p-3 rounded font-bold text-sm shadow">⏭️ Neste oppgave</button>
+                <button onclick="showTop3Modal()" class="bg-purple-600 hover:bg-purple-500 p-3 rounded font-bold text-sm shadow">🏆 Vis topp 3</button>
+                <button onclick="completeCompetition()" class="bg-red-600 hover:bg-red-500 p-3 rounded font-bold text-sm shadow">🏁 Fullfør Klasse mot klasse</button>
             </div>
         </div>
 
@@ -68,7 +80,7 @@
                 <div>
                     <label class="block text-sm mb-1">Enhet:</label>
                     <select id="qUnitType" onchange="handleUnitChange()" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
-                        <option value="tid">Tid (skriv som min:sek, f.eks. 1:30)</option>
+                        <option value="tid">Tid (skriv som min:sek)</option>
                         <option value="cm">cm</option>
                         <option value="meter">meter</option>
                         <option value="liter">liter</option>
@@ -80,26 +92,26 @@
 
             <div id="customUnitContainer" class="hidden">
                 <label class="block text-sm mb-1">Skriv inn egendefinert enhet:</label>
-                <input type="text" id="qCustomUnit" placeholder="F.eks. kg, poeng, runder" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                <input type="text" id="qCustomUnit" placeholder="F.eks. kg, poeng" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                    <label class="block text-sm mb-1">Minimum utfall (tall eller min:sek):</label>
-                    <input type="text" id="qMin" placeholder="0 eller 0:00" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                    <label class="block text-sm mb-1">Minimum utfall:</label>
+                    <input type="text" id="qMin" placeholder="0" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
                 </div>
                 <div>
-                    <label class="block text-sm mb-1">Maksimum utfall (tall eller min:sek):</label>
-                    <input type="text" id="qMax" placeholder="300 eller 5:00" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                    <label class="block text-sm mb-1">Maksimum utfall:</label>
+                    <input type="text" id="qMax" placeholder="300" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
                 </div>
                 <div>
-                    <label class="block text-sm mb-1">Steg (sekunder eller tall):</label>
-                    <input type="number" step="any" id="qStep" placeholder="1" value="1" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                    <label class="block text-sm mb-1">Steg:</label>
+                    <input type="number" step="any" id="qStep" value="1" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
                 </div>
             </div>
 
             <div>
-                <label class="block text-sm mb-1">Fasit (tall eller min:sek, f.eks. 1:15):</label>
+                <label class="block text-sm mb-1">Fasit:</label>
                 <input type="text" id="qCorrect" placeholder="F.eks. 1:15" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
             </div>
 
@@ -109,12 +121,19 @@
             </div>
         </div>
 
-        <!-- Oversikt over opprettede spørsmål -->
+        <!-- Spørsmålsbank -->
         <div id="questionListSection" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4 hidden">
             <h2 class="text-xl font-semibold text-yellow-400">3. Spørsmålsbank for denne konkurransen</h2>
-            <div id="questionsContainer" class="space-y-3">
-                <!-- Spørsmål listes opp her dynamisk -->
-            </div>
+            <div id="questionsContainer" class="space-y-3"></div>
+        </div>
+    </div>
+
+    <!-- Modal for Topp 3 eller Sluttresultat -->
+    <div id="resultModal" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl max-w-lg w-full p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+            <h3 id="modalTitle" class="text-2xl font-bold text-yellow-400">Resultat</h3>
+            <div id="modalContent" class="space-y-3 text-slate-300"></div>
+            <button onclick="closeModal()" class="w-full bg-slate-700 hover:bg-slate-600 p-2.5 rounded font-bold">Lukk</button>
         </div>
     </div>
 
@@ -125,58 +144,37 @@
         let allClasses = [];
 
         async function initData() {
-            try {
-                const { data: classesData } = await supabase.from('classes').select('*').order('name');
-                allClasses = classesData || [];
+            const { data: classesData } = await supabase.from('classes').select('*').order('name');
+            allClasses = classesData || [];
+            updateCreatorClassDropdown();
 
-                updateCreatorClassDropdown();
-
-                const { data: comps } = await supabase.from('competitions').select('*');
-
-                const select = document.getElementById('competitionSelect');
-                select.innerHTML = '<option value="">-- Velg konkurranse --</option>' + (comps || []).map(co => `
-                    <option value="${co.id}">${co.title}</option>
-                `).join('');
-            } catch (err) {
-                console.error('Feil under initData:', err);
-            }
+            const { data: comps } = await supabase.from('competitions').select('*');
+            const select = document.getElementById('competitionSelect');
+            select.innerHTML = '<option value="">-- Velg konkurranse --</option>' + (comps || []).map(co => `
+                <option value="${co.id}">${co.title}</option>
+            `).join('');
         }
 
         function updateCreatorClassDropdown() {
             const select = document.getElementById('qCreatorClass');
             let html = '<option value="Arrangør">Arrangør (Alle kan svare)</option>';
-            allClasses.forEach(c => {
-                html += `<option value="${c.name}">${c.name}</option>`;
-            });
+            allClasses.forEach(c => { html += `<option value="${c.name}">${c.name}</option>`; });
             select.innerHTML = html;
         }
 
         window.renderClassCheckboxes = function(selectedClassNames = []) {
             const box = document.getElementById('classListCheckboxes');
-            if (allClasses.length === 0) {
-                box.innerHTML = '<p class="text-slate-400 text-sm italic">Ingen klasser lagt til i systemet ennå.</p>';
-                return;
-            }
-
             box.innerHTML = allClasses.map(c => {
                 const isChecked = selectedClassNames.includes(c.name) ? 'checked' : '';
-                return `
-                    <label class="flex items-center gap-2 cursor-pointer p-1 hover:bg-slate-800 rounded">
-                        <input type="checkbox" value="${c.name}" class="comp-class-cb w-4 h-4 accent-cyan-500" ${isChecked}> 
-                        <span>${c.name}</span>
-                    </label>
-                `;
+                return `<label class="flex items-center gap-2 cursor-pointer p-1 hover:bg-slate-800 rounded"><input type="checkbox" value="${c.name}" class="comp-class-cb w-4 h-4 accent-cyan-500" ${isChecked}> <span>${c.name}</span></label>`;
             }).join('');
         }
 
         window.handleUnitChange = function() {
             const val = document.getElementById('qUnitType').value;
             const container = document.getElementById('customUnitContainer');
-            if (val === 'egendefinert') {
-                container.classList.remove('hidden');
-            } else {
-                container.classList.add('hidden');
-            }
+            if (val === 'egendefinert') container.classList.remove('hidden');
+            else container.classList.add('hidden');
         }
 
         function parseInputToNumber(valueStr) {
@@ -184,21 +182,9 @@
             valueStr = String(valueStr).trim();
             if (valueStr.includes(':')) {
                 const parts = valueStr.split(':');
-                const minutes = parseFloat(parts[0]) || 0;
-                const seconds = parseFloat(parts[1]) || 0;
-                return (minutes * 60) + seconds;
+                return (parseFloat(parts[0]) || 0) * 60 + (parseFloat(parts[1]) || 0);
             }
             return parseFloat(valueStr);
-        }
-
-        function formatValue(val, unitType) {
-            if (val === null || val === undefined) return 'Ikke satt';
-            if (unitType === 'tid') {
-                const mins = Math.floor(val / 60);
-                const secs = Math.round(val % 60);
-                return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-            }
-            return val;
         }
 
         async function loadQuestionsForCompetition(compId) {
@@ -206,288 +192,106 @@
             const container = document.getElementById('questionsContainer');
             if (!compId) {
                 section.classList.add('hidden');
+                document.getElementById('liveControlSection').classList.add('hidden');
                 return;
             }
             section.classList.remove('hidden');
+            document.getElementById('liveControlSection').classList.remove('hidden');
 
-            const { data: questions, error } = await supabase
-                .from('questions')
-                .select('*')
-                .eq('competition_id', compId)
-                .order('sort_order', { ascending: true })
-                .order('id', { ascending: true });
-
-            if (error) {
-                container.innerHTML = `<p class="text-red-400">Kunne ikke laste oppgaver: ${error.message}</p>`;
-                return;
-            }
-
+            const { data: questions } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
             currentQuestions = questions || [];
 
-            if (currentQuestions.length === 0) {
-                container.innerHTML = `<p class="text-slate-400 italic">Ingen oppgaver opprettet enda.</p>`;
-                return;
-            }
-
-            container.innerHTML = currentQuestions.map((q, index) => {
-                const minFormatted = formatValue(q.min_value, q.unit_type);
-                const maxFormatted = formatValue(q.max_value, q.unit_type);
-                const correctFormatted = formatValue(q.correct_answer, q.unit_type);
-                const unitLabel = q.unit_type === 'tid' ? 'sekunder (min:sek)' : (q.custom_unit || q.unit_type);
-
-                return `
-                    <div class="bg-slate-900 p-4 rounded border border-slate-700 flex justify-between items-center">
-                        <div class="space-y-1">
-                            <div class="flex items-center gap-2">
-                                <span class="text-cyan-400 font-bold">#${index + 1}</span> 
-                                <span class="font-medium text-lg">${q.question_text}</span>
-                            </div>
-                            <div class="text-xs text-slate-400">
-                                Laget av: <span class="text-yellow-300">${q.created_by_class}</span> | 
-                                Område: ${minFormatted} til ${maxFormatted} (${unitLabel}) | 
-                                Fasit: ${correctFormatted}
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button onclick="moveQuestion(${q.id}, 'up')" class="bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded text-sm font-bold" title="Flytt opp">⬆️</button>
-                            <button onclick="moveQuestion(${q.id}, 'down')" class="bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded text-sm font-bold" title="Flytt ned">⬇️</button>
-                            <button onclick="editQuestion(${q.id})" class="bg-amber-600 hover:bg-amber-500 px-3 py-1 rounded text-sm font-bold">Rediger</button>
-                            <button onclick="deleteQuestion(${q.id})" class="bg-red-600 hover:bg-red-500 px-3 py-1 rounded text-sm font-bold">Slett</button>
-                        </div>
+            container.innerHTML = currentQuestions.map((q, index) => `
+                <div class="bg-slate-900 p-4 rounded border border-slate-700 flex justify-between items-center">
+                    <div>
+                        <span class="text-cyan-400 font-bold">#${index + 1}</span> <span class="font-medium">${q.question_text}</span> 
+                        <span class="text-xs ml-2 px-2 py-0.5 rounded bg-slate-800 text-yellow-300">Status: ${q.status}</span>
                     </div>
-                `;
-            }).join('');
+                    <div class="flex gap-2">
+                        <button onclick="editQuestion(${q.id})" class="bg-amber-600 hover:bg-amber-500 px-3 py-1 rounded text-sm font-bold">Rediger</button>
+                        <button onclick="deleteQuestion(${q.id})" class="bg-red-600 hover:bg-red-500 px-3 py-1 rounded text-sm font-bold">Slett</button>
+                    </div>
+                </div>
+            `).join('');
         }
 
-        window.moveQuestion = async function(id, direction) {
-            const index = currentQuestions.findIndex(q => q.id === id);
-            if (index === -1) return;
-
-            const targetIndex = direction === 'up' ? index - 1 : index + 1;
-            if (targetIndex < 0 || targetIndex >= currentQuestions.length) return;
-
-            const temp = currentQuestions[index];
-            currentQuestions[index] = currentQuestions[targetIndex];
-            currentQuestions[targetIndex] = temp;
-
-            for (let i = 0; i < currentQuestions.length; i++) {
-                await supabase.from('questions').update({ sort_order: i }).eq('id', currentQuestions[i].id);
-            }
-
+        // --- LIVE SPILLKONTROLLER ---
+        window.startKlasseMotKlasse = async function() {
             const compId = document.getElementById('competitionSelect').value;
-            loadQuestionsForCompetition(compId);
+            if (!compId || currentQuestions.length === 0) return alert('Ingen oppgaver funnet.');
+            
+            // Sett første oppgave til 'active'
+            const firstQ = currentQuestions[0];
+            await supabase.from('questions').update({ status: 'active' }).eq('id', firstQ.id);
+            document.getElementById('activeLiveStatus').textContent = `Aktiv oppgave: "${firstQ.question_text}" er nå ÅPEN for svar!`;
+            alert('Første oppgave er startet på elevtelefonene!');
         }
 
-        window.editQuestion = function(id) {
-            const q = currentQuestions.find(item => item.id === id);
-            if (!q) return;
+        window.lockAnswersCountdown = async function() {
+            const activeQ = currentQuestions.find(q => q.status === 'active');
+            if (!activeQ) return alert('Ingen aktiv oppgave å låse.');
 
-            document.getElementById('editingQuestionId').value = q.id;
-            document.getElementById('formTitle').textContent = 'Rediger oppgave';
-            document.getElementById('saveQuestionBtn').textContent = 'Lagre Endringer';
-            document.getElementById('cancelEditBtn').classList.remove('hidden');
-
-            document.getElementById('qText').value = q.question_text;
-            document.getElementById('qCreatorClass').value = q.created_by_class;
-            document.getElementById('qUnitType').value = q.unit_type;
-            document.getElementById('qCustomUnit').value = q.custom_unit || '';
-            
-            function formatForInput(val, unitType) {
-                if (val === null || val === undefined) return '';
-                if (unitType === 'tid') {
-                    const mins = Math.floor(val / 60);
-                    const secs = Math.round(val % 60);
-                    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-                }
-                return val;
+            for (let i = 5; i > 0; i--) {
+                document.getElementById('activeLiveStatus').textContent = `Låser om ${i} sekunder...`;
+                await new Promise(r => setTimeout(r, 1000));
             }
 
-            document.getElementById('qMin').value = formatForInput(q.min_value, q.unit_type);
-            document.getElementById('qMax').value = formatForInput(q.max_value, q.unit_type);
-            document.getElementById('qStep').value = q.step_value || 1;
-            document.getElementById('qCorrect').value = formatForInput(q.correct_answer, q.unit_type);
-
-            handleUnitChange();
-            window.scrollTo({ top: 300, behavior: 'smooth' });
+            await supabase.from('questions').update({ status: 'locked' }).eq('id', activeQ.id);
+            activeQ.status = 'locked';
+            document.getElementById('activeLiveStatus').textContent = `Svarene er LÅST for oppgave: "${activeQ.question_text}".`;
+            alert('Tiden er ute! Svarene er låst.');
         }
 
-        document.getElementById('cancelEditBtn').addEventListener('click', () => {
-            resetForm();
-        });
+        window.openAnswersAgain = async function() {
+            const lockedQ = currentQuestions.find(q => q.status === 'locked' || q.status === 'active');
+            if (!lockedQ) return alert('Ingen aktuell oppgave å åpne.');
 
-        function resetForm() {
-            document.getElementById('editingQuestionId').value = '';
-            document.getElementById('formTitle').textContent = '2. Opprett oppgave';
-            document.getElementById('saveQuestionBtn').textContent = 'Lagre Oppgave';
-            document.getElementById('cancelEditBtn').classList.add('hidden');
-
-            document.getElementById('qText').value = '';
-            document.getElementById('qMin').value = '';
-            document.getElementById('qMax').value = '';
-            document.getElementById('qStep').value = '1';
-            document.getElementById('qCorrect').value = '';
-            document.getElementById('qCustomUnit').value = '';
+            await supabase.from('questions').update({ status: 'active' }).eq('id', lockedQ.id);
+            lockedQ.status = 'active';
+            document.getElementById('activeLiveStatus').textContent = `Oppgaven er gjenåpnet for svar!`;
+            alert('Svarene er åpnet igjen.');
         }
 
-        window.deleteQuestion = async function(id) {
-            if (!confirm('Er du sikker på at du vil slette denne oppgaven?')) return;
-            const { error } = await supabase.from('questions').delete().eq('id', id);
-            if (error) {
-                alert('Feil ved sletting: ' + error.message);
+        window.nextQuestion = async function() {
+            const currentIndex = currentQuestions.findIndex(q => q.status === 'active' || q.status === 'locked');
+            
+            // Sett nåværende til 'done'
+            if (currentIndex !== -1) {
+                await supabase.from('questions').update({ status: 'done' }).eq('id', currentQuestions[currentIndex].id);
+            }
+
+            const nextIndex = currentIndex === -1 ? 0 : currentIndex + 1;
+            if (nextIndex >= currentQuestions.length) {
+                alert('Dette var siste oppgave!');
                 return;
             }
-            const compId = document.getElementById('competitionSelect').value;
-            loadQuestionsForCompetition(compId);
+
+            const nextQ = currentQuestions[nextIndex];
+            await supabase.from('questions').update({ status: 'active' }).eq('id', nextQ.id);
+            await loadQuestionsForCompetition(document.getElementById('competitionSelect').value);
+            document.getElementById('activeLiveStatus').textContent = `Neste oppgave aktiv: "${nextQ.question_text}"`;
+            alert('Neste oppgave er sendt ut til elevene!');
         }
 
-        document.getElementById('addClassBtn').addEventListener('click', async () => {
-            const name = document.getElementById('classNameInput').value.trim();
-            if (!name) {
-                alert('Vennligst skriv et klassenavn.');
-                return;
-            }
-            const { error } = await supabase.from('classes').insert([{ name }]);
-            if (error) {
-                alert('Feil ved lagring av klasse: ' + error.message);
-                return;
-            }
-            document.getElementById('classNameInput').value = '';
-            await initData();
-            
-            // Oppdater avhukingslisten for aktiv konkurranse umiddelbart
-            const compId = document.getElementById('competitionSelect').value;
-            if (compId) {
-                const { data: compData } = await supabase.from('competitions').select('active_class_names').eq('id', compId).single();
-                renderClassCheckboxes(compData?.active_class_names || []);
-            }
+        window.showTop3Modal = function() {
+            document.getElementById('modalTitle').textContent = '🏆 Topp 3 Oversikt';
+            document.getElementById('modalContent').innerHTML = `<p class="italic">Her hentes statistikk over beste enkeltelever og klasser basert på innsendte svar mot fasit.</p>`;
+            document.getElementById('resultModal').classList.remove('hidden');
+        }
 
-            alert(`Klassen "${name}" ble lagt til i systemet!`);
-        });
+        window.completeCompetition = async function() {
+            if (!confirm('Vil du fullføre og avslutte hele konkurransen?')) return;
+            document.getElementById('modalTitle').textContent = '🏁 Sluttresultat - Klasse mot klasse';
+            document.getElementById('modalContent').innerHTML = `<p class="font-bold text-emerald-400">Konkurransen er avsluttet! Sluttabell for klasser og enkeltelever vises her.</p>`;
+            document.getElementById('resultModal').classList.remove('hidden');
+        }
 
-        document.getElementById('createCompBtn').addEventListener('click', async () => {
-            const titleInput = document.getElementById('compTitle');
-            const title = titleInput.value.trim();
+        window.closeModal = function() {
+            document.getElementById('resultModal').classList.add('hidden');
+        }
 
-            if (!title) {
-                alert('Vennligst skriv inn et navn på konkurransen.');
-                return;
-            }
-
-            const { error } = await supabase.from('competitions').insert([{ title, status: 'setup' }]);
-            
-            if (error) {
-                alert('Feil ved opprettelse: ' + error.message);
-                return;
-            }
-
-            titleInput.value = '';
-            await initData();
-            alert('Konkurranse opprettet!');
-        });
-
-        document.getElementById('competitionSelect').addEventListener('change', async (e) => {
-            const id = e.target.value;
-            const qSection = document.getElementById('questionSection');
-            const classContainer = document.getElementById('classSelectionContainer');
-            
-            if (!id) {
-                qSection.classList.add('hidden');
-                classContainer.classList.add('hidden');
-                document.getElementById('questionListSection').classList.add('hidden');
-                return;
-            }
-
-            classContainer.classList.remove('hidden');
-            qSection.classList.remove('hidden');
-            loadQuestionsForCompetition(id);
-            resetForm();
-
-            const { data: compData } = await supabase.from('competitions').select('active_class_names').eq('id', id).single();
-            const activeClasses = compData && compData.active_class_names ? compData.active_class_names : [];
-            renderClassCheckboxes(activeClasses);
-        });
-
-        document.getElementById('saveCompClassesBtn').addEventListener('click', async () => {
-            const id = document.getElementById('competitionSelect').value;
-            if (!id) {
-                alert('Velg en konkurranse først.');
-                return;
-            }
-
-            const selectedClasses = Array.from(document.querySelectorAll('.comp-class-cb:checked')).map(cb => cb.value);
-
-            const { error } = await supabase.from('competitions')
-                .update({ active_class_names: selectedClasses })
-                .eq('id', id);
-
-            if (error) {
-                alert('Feil ved lagring av deltakende klasser: ' + error.message);
-                return;
-            }
-
-            alert('Deltakende klasser for denne konkurransen er lagret!');
-        });
-
-        document.getElementById('saveQuestionBtn').addEventListener('click', async () => {
-            const competition_id = document.getElementById('competitionSelect').value;
-            const question_text = document.getElementById('qText').value.trim();
-            const created_by_class = document.getElementById('qCreatorClass').value;
-            const unit_type = document.getElementById('qUnitType').value;
-            const custom_unit = document.getElementById('qCustomUnit').value.trim();
-            
-            const min_value = parseInputToNumber(document.getElementById('qMin').value);
-            const max_value = parseInputToNumber(document.getElementById('qMax').value);
-            const step_value = parseFloat(document.getElementById('qStep').value) || 1;
-            const correct_answer = parseInputToNumber(document.getElementById('qCorrect').value);
-            const editingId = document.getElementById('editingQuestionId').value;
-
-            if (!competition_id || !question_text || isNaN(min_value) || isNaN(max_value)) {
-                alert('Vennligst fyll ut oppgavetekst, minimum og maksimum utfall.');
-                return;
-            }
-
-            if (editingId) {
-                const { error } = await supabase.from('questions').update({
-                    question_text,
-                    created_by_class,
-                    unit_type,
-                    custom_unit,
-                    min_value,
-                    max_value,
-                    step_value,
-                    correct_answer: isNaN(correct_answer) ? null : correct_answer
-                }).eq('id', editingId);
-
-                if (error) {
-                    alert('Feil ved oppdatering: ' + error.message);
-                    return;
-                }
-                alert('Oppgaven er oppdatert!');
-            } else {
-                const nextOrder = currentQuestions.length;
-                const { error } = await supabase.from('questions').insert([{
-                    competition_id,
-                    question_text,
-                    created_by_class,
-                    unit_type,
-                    custom_unit,
-                    min_value,
-                    max_value,
-                    step_value,
-                    correct_answer: isNaN(correct_answer) ? null : correct_answer,
-                    status: 'pending',
-                    sort_order: nextOrder
-                }]);
-
-                if (error) {
-                    alert('Feil ved lagring: ' + error.message);
-                    return;
-                }
-                alert('Oppgaven er lagret!');
-            }
-
-            resetForm();
-            loadQuestionsForCompetition(competition_id);
+        document.getElementById('competitionSelect').addEventListener('change', (e) => {
+            loadQuestionsForCompetition(e.target.value);
         });
 
         initData();
