@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alle mot 1 - Elevvisning</title>
+    <title>Klasse mot klasse - Elevvisning</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -26,7 +26,7 @@
         
         <!-- 1. Påloggingsskjerm (Navn og Klasse) -->
         <div id="classSelectView" class="w-full max-w-sm space-y-4 text-left">
-            <h2 class="text-2xl font-bold text-cyan-400 text-center">Velkommen til Alle mot 1</h2>
+            <h2 class="text-2xl font-bold text-cyan-400 text-center">Velkommen til Klasse mot klasse</h2>
             <p class="text-sm text-slate-300 text-center">Skriv navnet ditt og velg klassen din for å delta:</p>
             
             <div class="space-y-3">
@@ -98,36 +98,60 @@
     </main>
 
     <footer class="text-center text-xs text-slate-500">
-        Alle mot 1 &bull; Elevvisning
+        Klasse mot klasse &bull; Elevvisning
     </footer>
 
     <script type="module">
         import { supabase } from './supabaseClient.js';
 
-        let myName = localStorage.getItem('alle_mot_1_name');
-        let myClass = localStorage.getItem('alle_mot_1_class');
+        let myName = localStorage.getItem('kmk_student_name');
+        let myClass = localStorage.getItem('kmk_class_name');
         let currentCompId = null;
         let activeQuestion = null;
         let currentNumericValue = 0;
 
         async function init() {
+            // Finn aktiv konkurranse (den nyeste, eller hent fra URL om spesifisert)
+            const urlParams = new URLSearchParams(window.location.search);
+            const compParam = urlParams.get('comp');
+
+            let query = supabase.from('competitions').select('*').order('id', { ascending: false }).limit(1);
+            if (compParam) {
+                query = supabase.from('competitions').select('*').eq('id', compParam).single();
+            }
+
+            const { data: compData } = await query;
+            const comp = Array.isArray(compData) ? compData[0] : compData;
+
+            if (comp) {
+                currentCompId = comp.id;
+            }
+
             if (!myName || !myClass) {
                 showView('classSelectView');
-                loadClassesForDropdown();
+                loadAllowedClassesForDropdown(comp);
             } else {
                 document.getElementById('loggedStudentInfo').textContent = myName;
                 document.getElementById('loggedClassInfo').textContent = `Klasse: ${myClass}`;
                 showView('waitingView');
-                await fetchActiveCompetitionAndQuestion();
-                setInterval(fetchActiveCompetitionAndQuestion, 3000);
+                await fetchActiveQuestion();
+                setInterval(fetchActiveQuestion, 3000);
             }
         }
 
-        async function loadClassesForDropdown() {
-            const { data } = await supabase.from('classes').select('*').order('name');
+        async function loadAllowedClassesForDropdown(comp) {
+            let activeClasses = [];
+            if (comp && comp.active_class_names) {
+                activeClasses = comp.active_class_names;
+            } else {
+                // Fallback hvis ingen spesifikke klasser er valgt enda: hent alle
+                const { data } = await supabase.from('classes').select('*').order('name');
+                activeClasses = (data || []).map(c => c.name);
+            }
+
             const select = document.getElementById('classDropdown');
-            select.innerHTML = '<option value="">-- Velg klasse --</option>' + (data || []).map(c => `
-                <option value="${c.name}">${c.name}</option>
+            select.innerHTML = '<option value="">-- Velg klasse --</option>' + activeClasses.map(className => `
+                <option value="${className}">${className}</option>
             `).join('');
         }
 
@@ -144,14 +168,14 @@
                 return;
             }
 
-            localStorage.setItem('alle_mot_1_name', name);
-            localStorage.setItem('alle_mot_1_class', val);
+            localStorage.setItem('kmk_student_name', name);
+            localStorage.setItem('kmk_class_name', val);
             location.reload();
         }
 
         window.changeUser = function() {
-            localStorage.removeItem('alle_mot_1_name');
-            localStorage.removeItem('alle_mot_1_class');
+            localStorage.removeItem('kmk_student_name');
+            localStorage.removeItem('kmk_class_name');
             location.reload();
         }
 
@@ -162,11 +186,8 @@
             document.getElementById(viewId).classList.remove('hidden');
         }
 
-        async function fetchActiveCompetitionAndQuestion() {
-            const { data: comps } = await supabase.from('competitions').select('*').order('id', { ascending: false }).limit(1);
-            if (!comps || comps.length === 0) return;
-            
-            currentCompId = comps[0].id;
+        async function fetchActiveQuestion() {
+            if (!currentCompId) return;
 
             const { data: questions } = await supabase.from('questions')
                 .select('*')
