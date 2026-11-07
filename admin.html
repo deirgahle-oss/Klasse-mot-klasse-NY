@@ -41,7 +41,7 @@
             
             <div>
                 <label class="block text-sm mb-1">Oppgavetekst:</label>
-                <textarea id="qText" rows="3" placeholder="F.eks. Hvor mange sekunder bruker lærerne på å løpe 100 meter?" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white"></textarea>
+                <textarea id="qText" rows="3" placeholder="F.eks. Hvor mange sekunder / minutter bruker lærerne på å løpe 100 meter?" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white"></textarea>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -65,7 +65,7 @@
                 <div>
                     <label class="block text-sm mb-1">Enhet:</label>
                     <select id="qUnitType" onchange="toggleCustomUnit()" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
-                        <option value="tid">Tid (min:sek)</option>
+                        <option value="tid">Tid (min:sek / desimaltall)</option>
                         <option value="cm">cm</option>
                         <option value="meter">meter</option>
                         <option value="liter">liter</option>
@@ -82,16 +82,16 @@
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                    <label class="block text-sm mb-1">Minimum utfall (tall):</label>
-                    <input type="number" id="qMin" placeholder="0" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                    <label class="block text-sm mb-1">Minimum utfall:</label>
+                    <input type="number" step="any" id="qMin" placeholder="0" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
                 </div>
                 <div>
-                    <label class="block text-sm mb-1">Maksimum utfall (tall):</label>
-                    <input type="number" id="qMax" placeholder="300" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                    <label class="block text-sm mb-1">Maksimum utfall:</label>
+                    <input type="number" step="any" id="qMax" placeholder="300" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
                 </div>
                 <div>
                     <label class="block text-sm mb-1">Steg (hvor mye den hopper):</label>
-                    <input type="number" id="qStep" placeholder="1" value="1" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                    <input type="number" step="any" id="qStep" placeholder="1" value="1" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
                 </div>
             </div>
 
@@ -101,11 +101,19 @@
             </div>
 
             <div>
-                <label class="block text-sm mb-1">Fasit (tallverdi / sekund-ekvivalent, kan fylles ut senere):</label>
-                <input type="number" id="qCorrect" placeholder="F.eks. 75" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                <label class="block text-sm mb-1">Fasit (tallverdi, kan fylles ut senere):</label>
+                <input type="number" step="any" id="qCorrect" placeholder="F.eks. 75.5" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
             </div>
 
             <button id="addQuestionBtn" class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded font-bold w-full text-lg">Lagre Oppgave</button>
+        </div>
+
+        <!-- Oversikt over opprettede spørsmål for valgt konkurranse -->
+        <div id="questionListSection" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4 hidden">
+            <h2 class="text-xl font-semibold text-yellow-400">3. Spørsmålsbank for denne konkurransen</h2>
+            <div id="questionsContainer" class="space-y-3">
+                <!-- Spørsmål listes opp her dynamisk -->
+            </div>
         </div>
     </div>
 
@@ -130,6 +138,58 @@
             }
         }
 
+        async function loadQuestionsForCompetition(compId) {
+            const section = document.getElementById('questionListSection');
+            const container = document.getElementById('questionsContainer');
+            if (!compId) {
+                section.classList.add('hidden');
+                return;
+            }
+            section.classList.remove('hidden');
+
+            const { data: questions, error } = await supabase
+                .from('questions')
+                .select('*')
+                .eq('competition_id', compId)
+                .order('id', { ascending: true });
+
+            if (error) {
+                container.innerHTML = `<p class="text-red-400">Kunne ikke laste oppgaver: ${error.message}</p>`;
+                return;
+            }
+
+            if (!questions || questions.length === 0) {
+                container.innerHTML = `<p class="text-slate-400 italic">Ingen oppgaver opprettet enda.</p>`;
+                return;
+            }
+
+            container.innerHTML = questions.map((q, index) => `
+                <div class="bg-slate-900 p-4 rounded border border-slate-700 flex justify-between items-center">
+                    <div>
+                        <span class="text-cyan-400 font-bold">#${index + 1}</span> 
+                        <span class="font-medium">${q.question_text}</span>
+                        <div class="text-xs text-slate-400 mt-1">
+                            Laget av: <span class="text-yellow-300">${q.created_by_class}</span> | 
+                            Område: ${q.min_value} til ${q.max_value} (${q.unit_type}) | 
+                            Fasit: ${q.correct_answer !== null ? q.correct_answer : 'Ikke satt'}
+                        </div>
+                    </div>
+                    <button onclick="deleteQuestion(${q.id})" class="bg-red-600 hover:bg-red-500 px-3 py-1 rounded text-sm font-bold">Slett</button>
+                </div>
+            `).join('');
+        }
+
+        window.deleteQuestion = async function(id) {
+            if (!confirm('Er du sikker på at du vil slette denne oppgaven?')) return;
+            const { error } = await supabase.from('questions').delete().eq('id', id);
+            if (error) {
+                alert('Feil ved sletting: ' + error.message);
+                return;
+            }
+            const compId = document.getElementById('competitionSelect').value;
+            loadQuestionsForCompetition(compId);
+        }
+
         document.getElementById('createCompBtn').addEventListener('click', async () => {
             const title = document.getElementById('compTitle').value.trim();
             if (!title) return;
@@ -145,8 +205,10 @@
             const qSection = document.getElementById('questionSection');
             if (!id) {
                 qSection.classList.add('hidden');
+                document.getElementById('questionListSection').classList.add('hidden');
             } else {
                 qSection.classList.remove('hidden');
+                loadQuestionsForCompetition(id);
             }
         });
 
@@ -158,11 +220,11 @@
             const custom_unit = document.getElementById('qCustomUnit').value.trim();
             const min_value = parseFloat(document.getElementById('qMin').value);
             const max_value = parseFloat(document.getElementById('qMax').value);
-            const step_value = parseFloat(document.getElementById('qStep').value);
-            const correct_answer = parseFloat(document.getElementById('qCorrect').value) || null;
+            const step_value = parseFloat(document.getElementById('qStep').value) || 1;
+            const correct_answer = document.getElementById('qCorrect').value !== '' ? parseFloat(document.getElementById('qCorrect').value) : null;
 
             if (!competition_id || !question_text || isNaN(min_value) || isNaN(max_value)) {
-                alert('Vennligst fyll ut alle obligatoriske felt (tekst, min og max utfall).');
+                alert('Vennligst fyll ut oppgavetekst, minimum og maksimum utfall.');
                 return;
             }
 
@@ -189,6 +251,7 @@
             document.getElementById('qMin').value = '';
             document.getElementById('qMax').value = '';
             document.getElementById('qCorrect').value = '';
+            loadQuestionsForCompetition(competition_id);
         });
 
         loadCompetitions();
