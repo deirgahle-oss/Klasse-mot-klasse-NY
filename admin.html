@@ -2,12 +2,12 @@
 <html lang="no">
 <head>
     <meta charset="UTF-8">
-    <title>Arrangør - Klasse mot klasse (Alle mot 1)</title>
+    <title>Arrangør - Klasse mot klasse</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-white min-h-screen p-6">
     <div class="max-w-4xl mx-auto space-y-8">
-        <h1 class="text-3xl font-bold text-yellow-400">Arrangørpanel - Alle mot 1</h1>
+        <h1 class="text-3xl font-bold text-yellow-400">Arrangørpanel - Klasse mot klasse</h1>
 
         <!-- Konkurranse- og klasseadministrasjon -->
         <div class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-6">
@@ -17,7 +17,7 @@
                 <!-- Opprett konkurranse -->
                 <div class="bg-slate-900 p-4 rounded border border-slate-700">
                     <label class="block text-sm mb-1 font-semibold">Opprett ny konkurranse:</label>
-                    <input type="text" id="compTitle" placeholder="F.eks. Alle mot 1 - Vår 2026" class="w-full p-2 rounded bg-slate-800 border border-slate-600 text-white mb-2">
+                    <input type="text" id="compTitle" placeholder="F.eks. Klasse mot klasse - Vår 2026" class="w-full p-2 rounded bg-slate-800 border border-slate-600 text-white mb-2">
                     <button id="createCompBtn" class="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded font-bold w-full">Opprett Konkurranse</button>
                 </div>
 
@@ -50,7 +50,7 @@
 
         <!-- Legg til / Rediger Spørsmål -->
         <div id="questionSection" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4 hidden">
-            <h2 id="formTitle" class="text-xl font-semibold text-cyan-400">2. Opprett "Alle mot 1"-oppgave</h2>
+            <h2 id="formTitle" class="text-xl font-semibold text-cyan-400">2. Opprett oppgave</h2>
             <input type="hidden" id="editingQuestionId" value="">
             
             <div>
@@ -124,25 +124,21 @@
         let currentQuestions = [];
         let allClasses = [];
 
-        console.log('Admin-skript lastet inn');
-
         async function initData() {
             try {
-                const { data: classesData, error: classErr } = await supabase.from('classes').select('*').order('name');
-                if (classErr) console.error('Feil ved henting av klasser:', classErr);
+                const { data: classesData } = await supabase.from('classes').select('*').order('name');
                 allClasses = classesData || [];
 
                 updateCreatorClassDropdown();
 
-                const { data: comps, error: compErr } = await supabase.from('competitions').select('*');
-                if (compErr) console.error('Feil ved henting av konkurranser:', compErr);
+                const { data: comps } = await supabase.from('competitions').select('*');
 
                 const select = document.getElementById('competitionSelect');
                 select.innerHTML = '<option value="">-- Velg konkurranse --</option>' + (comps || []).map(co => `
                     <option value="${co.id}">${co.title}</option>
                 `).join('');
             } catch (err) {
-                console.error('Kritiske feil under initData:', err);
+                console.error('Feil under initData:', err);
             }
         }
 
@@ -287,7 +283,7 @@
             if (!q) return;
 
             document.getElementById('editingQuestionId').value = q.id;
-            document.getElementById('formTitle').textContent = 'Rediger "Alle mot 1"-oppgave';
+            document.getElementById('formTitle').textContent = 'Rediger oppgave';
             document.getElementById('saveQuestionBtn').textContent = 'Lagre Endringer';
             document.getElementById('cancelEditBtn').classList.remove('hidden');
 
@@ -321,7 +317,7 @@
 
         function resetForm() {
             document.getElementById('editingQuestionId').value = '';
-            document.getElementById('formTitle').textContent = '2. Opprett "Alle mot 1"-oppgave';
+            document.getElementById('formTitle').textContent = '2. Opprett oppgave';
             document.getElementById('saveQuestionBtn').textContent = 'Lagre Oppgave';
             document.getElementById('cancelEditBtn').classList.add('hidden');
 
@@ -357,6 +353,14 @@
             }
             document.getElementById('classNameInput').value = '';
             await initData();
+            
+            // Oppdater avhukingslisten for aktiv konkurranse umiddelbart
+            const compId = document.getElementById('competitionSelect').value;
+            if (compId) {
+                const { data: compData } = await supabase.from('competitions').select('active_class_names').eq('id', compId).single();
+                renderClassCheckboxes(compData?.active_class_names || []);
+            }
+
             alert(`Klassen "${name}" ble lagt til i systemet!`);
         });
 
