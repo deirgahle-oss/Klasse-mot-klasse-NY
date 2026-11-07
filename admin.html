@@ -41,7 +41,7 @@
             
             <div>
                 <label class="block text-sm mb-1">Oppgavetekst:</label>
-                <textarea id="qText" rows="3" placeholder="F.eks. Hvor mange sekunder / minutter bruker lærerne på å løpe 100 meter?" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white"></textarea>
+                <textarea id="qText" rows="3" placeholder="F.eks. Hvor lang tid bruker rektor på å løpe 100 meter?" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white"></textarea>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -64,8 +64,8 @@
                 </div>
                 <div>
                     <label class="block text-sm mb-1">Enhet:</label>
-                    <select id="qUnitType" onchange="toggleCustomUnit()" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
-                        <option value="tid">Tid (min:sek / desimaltall)</option>
+                    <select id="qUnitType" onchange="handleUnitChange()" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                        <option value="tid">Tid (skriv som min:sek, f.eks. 1:30)</option>
                         <option value="cm">cm</option>
                         <option value="meter">meter</option>
                         <option value="liter">liter</option>
@@ -82,15 +82,15 @@
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                    <label class="block text-sm mb-1">Minimum utfall:</label>
-                    <input type="number" step="any" id="qMin" placeholder="0" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                    <label class="block text-sm mb-1" id="labelMin">Minimum utfall (tall eller min:sek):</label>
+                    <input type="text" id="qMin" placeholder="0 eller 0:00" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
                 </div>
                 <div>
-                    <label class="block text-sm mb-1">Maksimum utfall:</label>
-                    <input type="number" step="any" id="qMax" placeholder="300" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                    <label class="block text-sm mb-1" id="labelMax">Maksimum utfall (tall eller min:sek):</label>
+                    <input type="text" id="qMax" placeholder="300 eller 5:00" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
                 </div>
                 <div>
-                    <label class="block text-sm mb-1">Steg (hvor mye den hopper):</label>
+                    <label class="block text-sm mb-1">Steg (sekunder eller tall):</label>
                     <input type="number" step="any" id="qStep" placeholder="1" value="1" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
                 </div>
             </div>
@@ -101,8 +101,8 @@
             </div>
 
             <div>
-                <label class="block text-sm mb-1">Fasit (tallverdi, kan fylles ut senere):</label>
-                <input type="number" step="any" id="qCorrect" placeholder="F.eks. 75.5" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                <label class="block text-sm mb-1" id="labelCorrect">Fasit (tall eller min:sek, f.eks. 1:15):</label>
+                <input type="text" id="qCorrect" placeholder="F.eks. 1:15" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
             </div>
 
             <button id="addQuestionBtn" class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded font-bold w-full text-lg">Lagre Oppgave</button>
@@ -128,7 +128,7 @@
             `).join('');
         }
 
-        window.toggleCustomUnit = function() {
+        window.handleUnitChange = function() {
             const val = document.getElementById('qUnitType').value;
             const container = document.getElementById('customUnitContainer');
             if (val === 'egendefinert') {
@@ -136,6 +136,31 @@
             } else {
                 container.classList.add('hidden');
             }
+        }
+
+        // Hjelpefunksjon for å gjøre om "min:sek" (f.eks. "1:30") til antall totale sekunder (90)
+        // Om det bare er et vanlig tall (f.eks. "75"), returneres det som et vanlig tall.
+        function parseInputToNumber(valueStr) {
+            if (!valueStr) return null;
+            valueStr = valueStr.trim();
+            if (valueStr.includes(':')) {
+                const parts = valueStr.split(':');
+                const minutes = parseFloat(parts[0]) || 0;
+                const seconds = parseFloat(parts[1]) || 0;
+                return (minutes * 60) + seconds;
+            }
+            return parseFloat(valueStr);
+        }
+
+        // Hjelpefunksjon for å vise sekunder pent som "min:sek" om enheten er tid
+        function formatValue(val, unitType) {
+            if (val === null || val === undefined) return 'Ikke satt';
+            if (unitType === 'tid') {
+                const mins = Math.floor(val / 60);
+                const secs = Math.round(val % 60);
+                return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+            }
+            return val;
         }
 
         async function loadQuestionsForCompetition(compId) {
@@ -163,20 +188,27 @@
                 return;
             }
 
-            container.innerHTML = questions.map((q, index) => `
-                <div class="bg-slate-900 p-4 rounded border border-slate-700 flex justify-between items-center">
-                    <div>
-                        <span class="text-cyan-400 font-bold">#${index + 1}</span> 
-                        <span class="font-medium">${q.question_text}</span>
-                        <div class="text-xs text-slate-400 mt-1">
-                            Laget av: <span class="text-yellow-300">${q.created_by_class}</span> | 
-                            Område: ${q.min_value} til ${q.max_value} (${q.unit_type}) | 
-                            Fasit: ${q.correct_answer !== null ? q.correct_answer : 'Ikke satt'}
+            container.innerHTML = questions.map((q, index) => {
+                const minFormatted = formatValue(q.min_value, q.unit_type);
+                const maxFormatted = formatValue(q.max_value, q.unit_type);
+                const correctFormatted = formatValue(q.correct_answer, q.unit_type);
+                const unitLabel = q.unit_type === 'tid' ? 'sekunder (min:sek)' : (q.custom_unit || q.unit_type);
+
+                return `
+                    <div class="bg-slate-900 p-4 rounded border border-slate-700 flex justify-between items-center">
+                        <div>
+                            <span class="text-cyan-400 font-bold">#${index + 1}</span> 
+                            <span class="font-medium">${q.question_text}</span>
+                            <div class="text-xs text-slate-400 mt-1">
+                                Laget av: <span class="text-yellow-300">${q.created_by_class}</span> | 
+                                Område: ${minFormatted} til ${maxFormatted} (${unitLabel}) | 
+                                Fasit: ${correctFormatted}
+                            </div>
                         </div>
+                        <button onclick="deleteQuestion(${q.id})" class="bg-red-600 hover:bg-red-500 px-3 py-1 rounded text-sm font-bold">Slett</button>
                     </div>
-                    <button onclick="deleteQuestion(${q.id})" class="bg-red-600 hover:bg-red-500 px-3 py-1 rounded text-sm font-bold">Slett</button>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         window.deleteQuestion = async function(id) {
@@ -218,10 +250,12 @@
             const created_by_class = document.getElementById('qCreatorClass').value;
             const unit_type = document.getElementById('qUnitType').value;
             const custom_unit = document.getElementById('qCustomUnit').value.trim();
-            const min_value = parseFloat(document.getElementById('qMin').value);
-            const max_value = parseFloat(document.getElementById('qMax').value);
+            
+            // Bruker helperen vår slik at f.eks. "1:30" blir til 90 sekunder i databasen
+            const min_value = parseInputToNumber(document.getElementById('qMin').value);
+            const max_value = parseInputToNumber(document.getElementById('qMax').value);
             const step_value = parseFloat(document.getElementById('qStep').value) || 1;
-            const correct_answer = document.getElementById('qCorrect').value !== '' ? parseFloat(document.getElementById('qCorrect').value) : null;
+            const correct_answer = parseInputToNumber(document.getElementById('qCorrect').value);
 
             if (!competition_id || !question_text || isNaN(min_value) || isNaN(max_value)) {
                 alert('Vennligst fyll ut oppgavetekst, minimum og maksimum utfall.');
@@ -237,7 +271,7 @@
                 min_value,
                 max_value,
                 step_value,
-                correct_answer,
+                correct_answer: isNaN(correct_answer) ? null : correct_answer,
                 status: 'pending'
             }]);
 
