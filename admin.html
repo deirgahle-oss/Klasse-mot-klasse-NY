@@ -124,20 +124,26 @@
         let currentQuestions = [];
         let allClasses = [];
 
+        console.log('Admin-skript lastet inn');
+
         async function initData() {
-            // Hent alle klasser fra databasen
-            const { data: classesData } = await supabase.from('classes').select('*').order('name');
-            allClasses = classesData || [];
+            try {
+                const { data: classesData, error: classErr } = await supabase.from('classes').select('*').order('name');
+                if (classErr) console.error('Feil ved henting av klasser:', classErr);
+                allClasses = classesData || [];
 
-            // Oppdater nedtrekkslisten for hvem som har laget oppgaven
-            updateCreatorClassDropdown();
+                updateCreatorClassDropdown();
 
-            // Hent konkurranser
-            const { data: comps } = await supabase.from('competitions').select('*');
-            const select = document.getElementById('competitionSelect');
-            select.innerHTML = '<option value="">-- Velg konkurranse --</option>' + (comps || []).map(co => `
-                <option value="${co.id}">${co.title}</option>
-            `).join('');
+                const { data: comps, error: compErr } = await supabase.from('competitions').select('*');
+                if (compErr) console.error('Feil ved henting av konkurranser:', compErr);
+
+                const select = document.getElementById('competitionSelect');
+                select.innerHTML = '<option value="">-- Velg konkurranse --</option>' + (comps || []).map(co => `
+                    <option value="${co.id}">${co.title}</option>
+                `).join('');
+            } catch (err) {
+                console.error('Kritiske feil under initData:', err);
+            }
         }
 
         function updateCreatorClassDropdown() {
@@ -149,10 +155,10 @@
             select.innerHTML = html;
         }
 
-        async function renderClassCheckboxes(selectedClassNames = []) {
+        window.renderClassCheckboxes = function(selectedClassNames = []) {
             const box = document.getElementById('classListCheckboxes');
             if (allClasses.length === 0) {
-                box.innerHTML = '<p class="text-slate-400 text-sm italic">Ingen klasser lagt til i systemet ennå. Bruk "Legg til ny klasse i systemet" ovenfor.</p>';
+                box.innerHTML = '<p class="text-slate-400 text-sm italic">Ingen klasser lagt til i systemet ennå.</p>';
                 return;
             }
 
@@ -338,10 +344,12 @@
             loadQuestionsForCompetition(compId);
         }
 
-        // Legg til ny klasse i systemet
         document.getElementById('addClassBtn').addEventListener('click', async () => {
             const name = document.getElementById('classNameInput').value.trim();
-            if (!name) return;
+            if (!name) {
+                alert('Vennligst skriv et klassenavn.');
+                return;
+            }
             const { error } = await supabase.from('classes').insert([{ name }]);
             if (error) {
                 alert('Feil ved lagring av klasse: ' + error.message);
@@ -355,19 +363,16 @@
         document.getElementById('createCompBtn').addEventListener('click', async () => {
             const titleInput = document.getElementById('compTitle');
             const title = titleInput.value.trim();
-            
-            console.log('Prøver å opprette konkurranse:', title); // Vises i F12 Console
 
             if (!title) {
                 alert('Vennligst skriv inn et navn på konkurransen.');
                 return;
             }
 
-            const { data, error } = await supabase.from('competitions').insert([{ title, status: 'setup' }]);
+            const { error } = await supabase.from('competitions').insert([{ title, status: 'setup' }]);
             
             if (error) {
                 alert('Feil ved opprettelse: ' + error.message);
-                console.error('Supabase feil:', error);
                 return;
             }
 
@@ -376,21 +381,34 @@
             alert('Konkurranse opprettet!');
         });
 
+        document.getElementById('competitionSelect').addEventListener('change', async (e) => {
+            const id = e.target.value;
+            const qSection = document.getElementById('questionSection');
+            const classContainer = document.getElementById('classSelectionContainer');
+            
+            if (!id) {
+                qSection.classList.add('hidden');
+                classContainer.classList.add('hidden');
+                document.getElementById('questionListSection').classList.add('hidden');
+                return;
+            }
+
             classContainer.classList.remove('hidden');
             qSection.classList.remove('hidden');
             loadQuestionsForCompetition(id);
             resetForm();
 
-            // Hent hvilke klasser som er lagret på denne konkurransen fra før
             const { data: compData } = await supabase.from('competitions').select('active_class_names').eq('id', id).single();
             const activeClasses = compData && compData.active_class_names ? compData.active_class_names : [];
             renderClassCheckboxes(activeClasses);
         });
 
-        // Lagre avhukede klasser for konkurransen
         document.getElementById('saveCompClassesBtn').addEventListener('click', async () => {
             const id = document.getElementById('competitionSelect').value;
-            if (!id) return;
+            if (!id) {
+                alert('Velg en konkurranse først.');
+                return;
+            }
 
             const selectedClasses = Array.from(document.querySelectorAll('.comp-class-cb:checked')).map(cb => cb.value);
 
@@ -465,3 +483,10 @@
             }
 
             resetForm();
+            loadQuestionsForCompetition(competition_id);
+        });
+
+        initData();
+    </script>
+</body>
+</html>
