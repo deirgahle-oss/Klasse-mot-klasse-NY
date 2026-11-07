@@ -6,14 +6,8 @@
     <title>Alle mot 1 - Elevvisning</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Skjul standardscrollbar for målebåndet, men behold funksjonaliteten */
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="bg-slate-900 text-white min-h-screen flex flex-col justify-between p-4 select-none">
@@ -21,23 +15,34 @@
     <!-- Toppbar: Vis hvem som er logget inn -->
     <header class="flex justify-between items-center bg-slate-800 p-3 rounded-xl border border-slate-700">
         <div>
-            <span class="text-xs text-slate-400 block">Klasse:</span>
-            <span id="loggedClassName" class="font-bold text-yellow-400 text-lg">-</span>
+            <span id="loggedStudentInfo" class="font-bold text-yellow-400 text-base">-</span>
+            <span id="loggedClassInfo" class="text-xs text-slate-400 block">-</span>
         </div>
-        <button onclick="changeClass()" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-slate-300 font-semibold">Bytt klasse</button>
+        <button onclick="changeUser()" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-slate-300 font-semibold">Bytt bruker</button>
     </header>
 
-    <!-- Hovedinnhold (Endrer seg basert på state) -->
+    <!-- Hovedinnhold -->
     <main id="mainContainer" class="flex-1 flex flex-col justify-center items-center my-6 text-center">
         
-        <!-- 1. Velg klasse-skjerm (vises hvis man ikke har valgt klasse enda) -->
-        <div id="classSelectView" class="w-full max-w-sm space-y-4">
-            <h2 class="text-2xl font-bold text-cyan-400">Velg din klasse</h2>
-            <p class="text-sm text-slate-300">Velg klassen du representerer i dagens quiz:</p>
-            <select id="classDropdown" class="w-full p-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-lg">
-                <option value="">-- Velg klasse --</option>
-            </select>
-            <button onclick="saveSelectedClass()" class="w-full bg-cyan-600 hover:bg-cyan-500 p-3 rounded-lg font-bold text-lg">Bli med i quiz</button>
+        <!-- 1. Påloggingsskjerm (Navn og Klasse) -->
+        <div id="classSelectView" class="w-full max-w-sm space-y-4 text-left">
+            <h2 class="text-2xl font-bold text-cyan-400 text-center">Velkommen til Alle mot 1</h2>
+            <p class="text-sm text-slate-300 text-center">Skriv navnet ditt og velg klassen din for å delta:</p>
+            
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Ditt navn:</label>
+                    <input type="text" id="studentNameInput" placeholder="F.eks. Ola Nordmann" class="w-full p-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-base">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1">Din klasse:</label>
+                    <select id="classDropdown" class="w-full p-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-base">
+                        <option value="">-- Velg klasse --</option>
+                    </select>
+                </div>
+            </div>
+
+            <button onclick="saveUserInfo()" class="w-full bg-cyan-600 hover:bg-cyan-500 p-3 rounded-lg font-bold text-lg mt-2">Bli med i quiz</button>
         </div>
 
         <!-- 2. Vente- / Startskjerm -->
@@ -47,42 +52,35 @@
             <p class="text-slate-400">Vent på at arrangøren starter neste oppgave...</p>
         </div>
 
-        <!-- 3. Aktiv Oppgave-skjerm (Alle mot 1 Målebånd) -->
+        <!-- 3. Aktiv Oppgave-skjerm (Målebånd) -->
         <div id="questionView" class="w-full max-w-md space-y-6 hidden">
-            <!-- Oppgavetekst -->
             <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-2">
                 <span id="qCreatorBadge" class="text-xs bg-yellow-500 text-black px-2 py-0.5 rounded font-bold uppercase">Laget av: -</span>
                 <h2 id="qTextDisplay" class="text-xl font-bold">Laster oppgave...</h2>
             </div>
 
-            <!-- Hvis klassen har laget oppgaven (Sperre-visning) -->
+            <!-- Sperre hvis klassen har laget oppgaven -->
             <div id="blockedView" class="bg-red-900/40 border border-red-600 p-6 rounded-xl space-y-3 hidden">
                 <div class="text-4xl">🛑</div>
                 <h3 class="text-xl font-bold text-red-400">Dere har laget denne oppgaven!</h3>
                 <p class="text-sm text-slate-300">Ettersom klassen din har forfattet dette spørsmålet, kan dere ikke delta med svar på akkurat denne runden. Følg med på storskjermen!</p>
             </div>
 
-            <!-- "Alle mot 1" Målebånd-kontroller -->
+            <!-- Målebånd-kontroller -->
             <div id="activeAnswerView" class="space-y-6">
                 <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 relative overflow-hidden shadow-2xl">
-                    
-                    <!-- Valgt verdi i midten (Fast siktepunkt) -->
                     <div class="mb-4">
                         <span class="text-xs text-slate-400 uppercase tracking-widest block">Ditt svar</span>
                         <span id="currentValDisplay" class="text-4xl font-extrabold text-cyan-400">0</span>
                         <span id="unitDisplay" class="text-sm text-slate-400 font-semibold ml-1">sekunder</span>
                     </div>
 
-                    <!-- Fast midtmarkør (Peker ned på det faste siktepunktet) -->
                     <div class="relative w-full h-24 bg-slate-900 rounded-lg overflow-hidden border border-slate-700 flex items-center">
                         <div class="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-1 bg-yellow-400 z-10 pointer-events-none shadow-[0_0_10px_#facc15]"></div>
                         <div class="absolute left-1/2 -translate-x-1/2 -top-1 w-3 h-3 bg-yellow-400 rotate-45 z-10 pointer-events-none"></div>
 
-                        <!-- Målebånd som kan dras horisontalt -->
                         <div id="rulerContainer" class="w-full overflow-x-auto no-scrollbar px-[50%] flex items-center h-full cursor-grab active:cursor-grabbing" onscroll="handleRulerScroll()">
-                            <div id="rulerTrack" class="flex items-center gap-12 h-full text-xs text-slate-500 font-mono">
-                                <!-- Genereres dynamisk avhengig av min/max -->
-                            </div>
+                            <div id="rulerTrack" class="flex items-center gap-12 h-full text-xs text-slate-500 font-mono"></div>
                         </div>
                     </div>
                     <p class="text-xs text-slate-400 mt-2">Dra målebåndet sideveis for å velge svar</p>
@@ -91,7 +89,6 @@
                 <button onclick="submitAnswer()" id="submitBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 p-4 rounded-xl font-bold text-lg shadow-lg">Lås inn svar! 🔒</button>
             </div>
 
-            <!-- Bekreftelse når svar er sendt -->
             <div id="submittedConfirmView" class="bg-emerald-900/40 border border-emerald-600 p-6 rounded-xl space-y-3 hidden">
                 <div class="text-4xl">✅</div>
                 <h3 class="text-xl font-bold text-emerald-400">Svaret ditt er låst inn!</h3>
@@ -100,7 +97,6 @@
         </div>
     </main>
 
-    <!-- Bunntekst -->
     <footer class="text-center text-xs text-slate-500">
         Alle mot 1 &bull; Elevvisning
     </footer>
@@ -108,21 +104,21 @@
     <script type="module">
         import { supabase } from './supabaseClient.js';
 
+        let myName = localStorage.getItem('alle_mot_1_name');
         let myClass = localStorage.getItem('alle_mot_1_class');
         let currentCompId = null;
         let activeQuestion = null;
         let currentNumericValue = 0;
 
         async function init() {
-            if (!myClass) {
+            if (!myName || !myClass) {
                 showView('classSelectView');
                 loadClassesForDropdown();
             } else {
-                document.getElementById('loggedClassName').textContent = myClass;
+                document.getElementById('loggedStudentInfo').textContent = myName;
+                document.getElementById('loggedClassInfo').textContent = `Klasse: ${myClass}`;
                 showView('waitingView');
                 await fetchActiveCompetitionAndQuestion();
-                
-                // Lytter etter sanntidsoppdateringer fra arrangøren (polling eller supabase real-time)
                 setInterval(fetchActiveCompetitionAndQuestion, 3000);
             }
         }
@@ -135,18 +131,26 @@
             `).join('');
         }
 
-        window.saveSelectedClass = function() {
+        window.saveUserInfo = function() {
+            const name = document.getElementById('studentNameInput').value.trim();
             const val = document.getElementById('classDropdown').value;
+            
+            if (!name) {
+                alert('Vennligst skriv inn navnet ditt.');
+                return;
+            }
             if (!val) {
                 alert('Vennligst velg en klasse.');
                 return;
             }
+
+            localStorage.setItem('alle_mot_1_name', name);
             localStorage.setItem('alle_mot_1_class', val);
-            myClass = val;
             location.reload();
         }
 
-        window.changeClass = function() {
+        window.changeUser = function() {
+            localStorage.removeItem('alle_mot_1_name');
             localStorage.removeItem('alle_mot_1_class');
             location.reload();
         }
@@ -159,14 +163,11 @@
         }
 
         async function fetchActiveCompetitionAndQuestion() {
-            // Hent den nyeste konkurransen (eller en som har status active)
             const { data: comps } = await supabase.from('competitions').select('*').order('id', { ascending: false }).limit(1);
             if (!comps || comps.length === 0) return;
             
-            const comp = comps[0];
-            currentCompId = comp.id;
+            currentCompId = comps[0].id;
 
-            // Hent aktivt spørsmål (status = 'active')
             const { data: questions } = await supabase.from('questions')
                 .select('*')
                 .eq('competition_id', currentCompId)
@@ -192,7 +193,6 @@
             document.getElementById('qTextDisplay').textContent = q.question_text;
             document.getElementById('qCreatorBadge').textContent = `Laget av: ${q.created_by_class}`;
 
-            // Sjekk om denne klassen har laget oppgaven
             const blockedView = document.getElementById('blockedView');
             const activeAnswerView = document.getElementById('activeAnswerView');
 
@@ -207,7 +207,6 @@
                 document.getElementById('submitBtn').disabled = false;
             }
 
-            // Bygg målebåndet
             buildRuler(q.min_value, q.max_value, q.step_value, q.unit_type, q.custom_unit);
         }
 
@@ -218,7 +217,6 @@
             const unitLabel = unitType === 'tid' ? 'sek' : (customUnit || unitType);
             document.getElementById('unitDisplay').textContent = unitLabel;
 
-            // Generer streker på målebåndet
             for (let val = min; val <= max; val += step) {
                 const tick = document.createElement('div');
                 tick.className = 'flex flex-col items-center justify-end h-12 min-w-[40px] cursor-pointer';
@@ -231,7 +229,6 @@
                 `;
                 tick.dataset.value = val;
                 
-                // Klikk direkte på en strek for å hoppe dit
                 tick.onclick = () => {
                     scrollToValue(val, min, max, step);
                 };
@@ -239,13 +236,11 @@
                 track.appendChild(tick);
             }
 
-            // Start på midten
             const midVal = (min + max) / 2;
             scrollToValue(midVal, min, max, step);
         }
 
         window.handleRulerScroll = function() {
-            // Beregn hvilken verdi som er i midten av rulleren basert på scroll-posisjon
             const container = document.getElementById('rulerContainer');
             const track = document.getElementById('rulerTrack');
             const ticks = track.children;
@@ -286,11 +281,12 @@
         }
 
         window.submitAnswer = async function() {
-            if (!myClass || !activeQuestion) return;
+            if (!myName || !myClass || !activeQuestion) return;
 
             const { error } = await supabase.from('answers').insert([{
                 question_id: activeQuestion.id,
                 class_name: myClass,
+                student_name: myName,
                 answer_value: currentNumericValue
             }]);
 
