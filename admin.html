@@ -61,6 +61,14 @@
             </div>
         </div>
 
+        <!-- NY: Live oversikt over hvem som har levert på aktivt spørsmål -->
+        <div id="liveAnswersOverview" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-3 hidden">
+            <h3 class="text-lg font-semibold text-cyan-300">📊 Innsendte svar på aktiv oppgave</h3>
+            <div id="answersCountPerClassList" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <!-- Fylles dynamisk -->
+            </div>
+        </div>
+
         <!-- Opprett / Rediger Spørsmål -->
         <div id="questionSection" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4 hidden">
             <h2 id="formTitle" class="text-xl font-semibold text-cyan-400">2. Opprett oppgave</h2>
@@ -129,12 +137,12 @@
         </div>
     </div>
 
-    <!-- Modal -->
+    <!-- Modal for Topp 3 / Resultat -->
     <div id="resultModal" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl max-w-lg w-full p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl max-w-xl w-full p-6 space-y-6 max-h-[85vh] overflow-y-auto">
             <h3 id="modalTitle" class="text-2xl font-bold text-yellow-400">Resultat</h3>
-            <div id="modalContent" class="space-y-3 text-slate-300"></div>
-            <button onclick="closeModal()" class="w-full bg-slate-700 hover:bg-slate-600 p-2.5 rounded font-bold">Lukk</button>
+            <div id="modalContent" class="space-y-4 text-slate-300"></div>
+            <button onclick="closeModal()" class="w-full bg-slate-700 hover:bg-slate-600 p-3 rounded font-bold text-white">Lukk</button>
         </div>
     </div>
 
@@ -143,6 +151,8 @@
 
         let currentQuestions = [];
         let allClasses = [];
+        let activeCompClasses = [];
+        let liveAnswersInterval = null;
 
         async function initData() {
             const { data: classesData } = await supabase.from('classes').select('*').order('name');
@@ -179,7 +189,7 @@
         }
 
         function parseInputToNumber(valueStr) {
-            if (!valueStr) return null;
+            if (!valueStr && valueStr !== 0) return null;
             valueStr = String(valueStr).trim();
             if (valueStr.includes(':')) {
                 const parts = valueStr.split(':');
@@ -191,30 +201,45 @@
         async function loadQuestionsForCompetition(compId) {
             const section = document.getElementById('questionListSection');
             const container = document.getElementById('questionsContainer');
+            const overviewBox = document.getElementById('liveAnswersOverview');
+
             if (!compId) {
                 section.classList.add('hidden');
                 document.getElementById('liveControlSection').classList.add('hidden');
+                overviewBox.classList.add('hidden');
+                if (liveAnswersInterval) clearInterval(liveAnswersInterval);
                 return;
             }
             section.classList.remove('hidden');
             document.getElementById('liveControlSection').classList.remove('hidden');
 
+            // Hent deltakende klasser for denne konkurransen
+            const { data: compData } = await supabase.from('competitions').select('active_class_names').eq('id', compId).single();
+            activeCompClasses = compData?.active_class_names || [];
+
             const { data: questions } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
             currentQuestions = questions || [];
 
-            const activeQ = currentQuestions.find(q => q.status === 'active');
-            const lockedQ = currentQuestions.find(q => q.status === 'locked');
+            const activeQ = currentQuestions.find(q => q.status === 'active' || q.status === 'locked');
             const statusBox = document.getElementById('activeLiveStatus');
 
             if (activeQ) {
-                statusBox.className = "p-4 rounded-xl border border-emerald-500 bg-emerald-950/80 text-emerald-300 text-center font-bold text-lg animate-pulse shadow-[0_0_15px_rgba(16,185,129,0.4)]";
-                statusBox.innerHTML = `🟢 OPPGAVE ÅPEN FOR SVAR!<br><span class="text-white text-base">#${activeQ.sort_order + 1}: ${activeQ.question_text}</span>`;
-            } else if (lockedQ) {
-                statusBox.className = "p-4 rounded-xl border border-amber-500 bg-amber-950/80 text-amber-300 text-center font-bold text-lg";
-                statusBox.innerHTML = `🔒 SVAR ER LÅST<br><span class="text-white text-base">"${lockedQ.question_text}"</span>`;
+                const isLocked = activeQ.status === 'locked';
+                statusBox.className = isLocked 
+                    ? "p-4 rounded-xl border border-amber-500 bg-amber-950/80 text-amber-300 text-center font-bold text-lg"
+                    : "p-4 rounded-xl border border-emerald-500 bg-emerald-950/80 text-emerald-300 text-center font-bold text-lg animate-pulse shadow-[0_0_15px_rgba(16,185,129,0.4)]";
+                
+                statusBox.innerHTML = isLocked 
+                    ? `🔒 SVAR ER LÅST<br><span class="text-white text-base">"${activeQ.question_text}"</span>`
+                    : `🟢 OPPGAVE ÅPEN FOR SVAR!<br><span class="text-white text-base">#${activeQ.sort_order + 1}: ${activeQ.question_text}</span>`;
+                
+                overviewBox.classList.remove('hidden');
+                startLiveAnswersPolling(activeQ.id);
             } else {
                 statusBox.className = "p-4 rounded-xl border border-slate-600 bg-slate-900 text-slate-300 text-center font-bold text-lg";
                 statusBox.textContent = "Status: Ingen aktiv oppgave pågår.";
+                overviewBox.classList.add('hidden');
+                if (liveAnswersInterval) clearInterval(liveAnswersInterval);
             }
 
             if (currentQuestions.length === 0) {
@@ -238,6 +263,36 @@
             `).join('');
         }
 
+        // Hent antall svar per klasse i sanntid
+        function startLiveAnswersPolling(questionId) {
+            if (liveAnswersInterval) clearInterval(liveAnswersInterval);
+            fetchAnswersCount(questionId);
+            liveAnswersInterval = setInterval(() => fetchAnswersCount(questionId), 2500);
+        }
+
+        async function fetchAnswersCount(questionId) {
+            const { data: answers } = await supabase.from('answers').select('class_name').eq('question_id', questionId);
+            const countBox = document.getElementById('answersCountPerClassList');
+            
+            const counts = {};
+            (answers || []).forEach(a => {
+                counts[a.class_name] = (counts[a.class_name] || 0) + 1;
+            });
+
+            const classesToShow = activeCompClasses.length > 0 ? activeCompClasses : allClasses.map(c => c.name);
+
+            countBox.innerHTML = classesToShow.map(className => {
+                const delivered = counts[className] || 0;
+                const hasDelivered = delivered > 0;
+                return `
+                    <div class="bg-slate-900 p-3 rounded border ${hasDelivered ? 'border-emerald-600 bg-emerald-950/30' : 'border-slate-700'} flex justify-between items-center">
+                        <span class="font-medium text-sm text-slate-200">${className}</span>
+                        <span class="px-2.5 py-1 rounded font-bold text-xs ${hasDelivered ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'}">${delivered} levert</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
         window.moveQuestion = async function(id, direction) {
             const index = currentQuestions.findIndex(q => q.id === id);
             if (index === -1) return;
@@ -256,7 +311,7 @@
             loadQuestionsForCompetition(document.getElementById('competitionSelect').value);
         }
 
-        // --- LIVE SPILLKONTROLLER (Uten irriterende pop-up-bekreftelser) ---
+        // --- LIVE SPILLKONTROLLER ---
         window.startKlasseMotKlasse = async function() {
             const compId = document.getElementById('competitionSelect').value;
             if (!compId || currentQuestions.length === 0) {
@@ -266,10 +321,7 @@
             
             const firstQ = currentQuestions[0];
             const { error } = await supabase.from('questions').update({ status: 'active' }).eq('id', firstQ.id);
-            if (error) {
-                alert('Kunne ikke starte oppgaven: ' + error.message);
-                return;
-            }
+            if (error) { alert('Kunne ikke starte: ' + error.message); return; }
             loadQuestionsForCompetition(compId);
         }
 
@@ -279,7 +331,7 @@
             const activeQ = (qList || []).find(q => q.status === 'active');
             
             if (!activeQ) {
-                alert('Fant ingen aktiv oppgave å låse. Start en oppgave først.');
+                alert('Fant ingen aktiv oppgave å låse.');
                 return;
             }
 
@@ -289,10 +341,7 @@
             }
 
             const { error } = await supabase.from('questions').update({ status: 'locked' }).eq('id', activeQ.id);
-            if (error) {
-                alert('Feil ved låsing av svar: ' + error.message);
-                return;
-            }
+            if (error) { alert('Feil ved låsing: ' + error.message); return; }
             loadQuestionsForCompetition(compId);
         }
 
@@ -301,16 +350,10 @@
             const { data: qList } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
             const targetQ = (qList || []).find(q => q.status === 'locked' || q.status === 'active');
             
-            if (!targetQ) {
-                alert('Fant ingen aktuell oppgave å åpne.');
-                return;
-            }
+            if (!targetQ) { alert('Ingen aktuell oppgave å åpne.'); return; }
 
             const { error } = await supabase.from('questions').update({ status: 'active' }).eq('id', targetQ.id);
-            if (error) {
-                alert('Kunne ikke åpne svar: ' + error.message);
-                return;
-            }
+            if (error) { alert('Kunne ikke åpne: ' + error.message); return; }
             loadQuestionsForCompetition(compId);
         }
 
@@ -333,17 +376,121 @@
 
             const nextQ = qList[nextIndex];
             const { error } = await supabase.from('questions').update({ status: 'active' }).eq('id', nextQ.id);
-            if (error) {
-                alert('Kunne ikke aktivere neste oppgave: ' + error.message);
-                return;
-            }
+            if (error) { alert('Kunne ikke aktivere neste: ' + error.message); return; }
             loadQuestionsForCompetition(compId);
         }
 
-        window.showTop3Modal = function() {
+        // --- BEREGNING AV TOPP 3 (Individuelt og Klassevis snitt) ---
+        window.showTop3Modal = async function() {
+            const compId = document.getElementById('competitionSelect').value;
+            if (!compId) return;
+
             document.getElementById('modalTitle').textContent = '🏆 Topp 3 Oversikt';
-            document.getElementById('modalContent').innerHTML = `<p class="italic">Her hentes statistikk over beste enkeltelever og klasser basert på innsendte svar mot fasit.</p>`;
+            const contentDiv = document.getElementById('modalContent');
+            contentDiv.innerHTML = `<p class="text-slate-400 italic">Beregner poeng og rangering...</p>`;
             document.getElementById('resultModal').classList.remove('hidden');
+
+            // Hent alle spørsmål og svar for denne konkurransen
+            const { data: questions } = await supabase.from('questions').select('*').eq('competition_id', compId);
+            if (!questions || questions.length === 0) {
+                contentDiv.innerHTML = `<p>Ingen oppgaver funnet i denne konkurransen.</p>`;
+                return;
+            }
+
+            const qIds = questions.map(q => q.id);
+            const { data: answers } = await supabase.from('answers').select('*').in('question_id', qIds);
+
+            if (!answers || answers.length === 0) {
+                contentDiv.innerHTML = `<p>Ingen innsendte svar registrert ennå.</p>`;
+                return;
+            }
+
+            // Lag kart for spørsmål for å finne fasit
+            const qMap = {};
+            questions.forEach(q => { qMap[q.id] = q; });
+
+            // Beregn poeng per elev (mindre avvik fra fasit = færre poeng/feilpoeng, la oss si absolutt differanse)
+            // Poengsum = summet absolutt avstand fra fasit på alle besvarte spørsmål (lavest poengsum / avstand = vinner)
+            // Eller la oss bruke standard avstand: sum av |svar - fasit| (lavere tall er bedre).
+            const studentStats = {}; // { "Ola Nordmann": { className: "Aqua", totalDiff: 0, count: 0 } }
+            const classStats = {};   // { "Aqua": { totalDiffSum: 0, totalAnswers: 0 } }
+
+            answers.forEach(a => {
+                const q = qMap[a.question_id];
+                if (!q || q.correct_answer === null || q.correct_answer === undefined) return;
+
+                const diff = Math.abs(Number(a.answer_value) - Number(q.correct_answer));
+                const studentKey = `${a.student_name} (${a.class_name})`;
+
+                if (!studentStats[studentKey]) {
+                    studentStats[studentKey] = { name: a.student_name, className: a.class_name, totalDiff: 0, count: 0 };
+                }
+                studentStats[studentKey].totalDiff += diff;
+                studentStats[studentKey].count += 1;
+
+                if (!classStats[a.class_name]) {
+                    classStats[a.class_name] = { totalDiff: 0, totalCount: 0 };
+                }
+                classStats[a.class_name].totalDiff += diff;
+                classStats[a.class_name].totalCount += 1;
+            });
+
+            // Konverter til lister og sorter på lavest snitt / avstand
+            const studentArray = Object.values(studentStats).map(s => ({
+                name: s.name,
+                className: s.className,
+                avgDiff: s.count > 0 ? s.totalDiff / s.count : 0
+            })).sort((a, b) => a.avgDiff - b.avgDiff);
+
+            const classArray = Object.values(classStats).map((c, idx) => {
+                // Finn navnet via nøkkelen i objektet
+                const className = Object.keys(classStats)[idx];
+                return {
+                    className: Object.keys(classStats)[idx],
+                    avgDiff: c.totalCount > 0 ? c.totalDiff / c.totalCount : 999999
+                };
+            }).sort((a, b) => a.avgDiff - b.avgDiff);
+
+            // Generer HTML for Topp 3 Individuelt
+            let html = `<div class="space-y-6">`;
+            
+            html += `<div>
+                <h4 class="text-lg font-bold text-cyan-400 mb-2 border-b border-slate-700 pb-1">⭐ Topp 3 Enkeltelever (Minst avvik)</h4>`;
+            if (studentArray.length === 0) {
+                html += `<p class="text-sm text-slate-400 italic">Ingen fasiter er satt eller besvart enda.</p>`;
+            } else {
+                html += `<ol class="space-y-2">`;
+                studentArray.slice(0, 3).forEach((st, idx) => {
+                    const medals = ['🥇', '🥈', '🥉'];
+                    html += `<li class="bg-slate-900 p-3 rounded flex justify-between items-center border border-slate-700">
+                        <span class="font-bold">${medals[idx]} ${st.name} <span class="text-xs text-slate-400 font-normal">(${st.className})</span></span>
+                        <span class="text-xs text-yellow-400 font-mono">Snitt avvik: ${st.avgDiff.toFixed(1)}</span>
+                    </li>`;
+                });
+                html += `</ol>`;
+            }
+            html += `</div>`;
+
+            // Generer HTML for Topp 3 Klasser (basert på poengsnitt / avviksnitt)
+            html += `<div>
+                <h4 class="text-lg font-bold text-yellow-300 mb-2 border-b border-slate-700 pb-1">🏫 Topp 3 Klasser (Beste snitt)</h4>`;
+            if (classArray.length === 0) {
+                html += `<p class="text-sm text-slate-400 italic">Ingen klasse-data tilgjengelig enda.</p>`;
+            } else {
+                html += `<ol class="space-y-2">`;
+                classArray.slice(0, 3).forEach((cl, idx) => {
+                    const medals = ['🥇', '🥈', '🥉'];
+                    html += `<li class="bg-slate-900 p-3 rounded flex justify-between items-center border border-slate-700">
+                        <span class="font-bold">${medals[idx]} ${cl.className}</span>
+                        <span class="text-xs text-emerald-400 font-mono">Klassesnitt avvik: ${cl.avgDiff.toFixed(1)}</span>
+                    </li>`;
+                });
+                html += `</ol>`;
+            }
+            html += `</div>`;
+
+            html += `</div>`;
+            contentDiv.innerHTML = html;
         }
 
         window.completeCompetition = async function() {
@@ -372,7 +519,7 @@
             document.getElementById('qMin').value = q.min_value;
             document.getElementById('qMax').value = q.max_value;
             document.getElementById('qStep').value = q.step_value || 1;
-            document.getElementById('qCorrect').value = q.correct_answer || '';
+            document.getElementById('qCorrect').value = q.correct_answer !== null ? q.correct_answer : '';
             window.scrollTo({ top: 300, behavior: 'smooth' });
         }
 
