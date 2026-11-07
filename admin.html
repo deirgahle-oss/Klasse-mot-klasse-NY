@@ -58,8 +58,7 @@
                 <button onclick="openAnswersAgain()" class="bg-blue-600 hover:bg-blue-500 p-3 rounded font-bold text-sm shadow">🔓 Åpne svar</button>
                 <button onclick="nextQuestion()" class="bg-emerald-600 hover:bg-emerald-500 p-3 rounded font-bold text-sm shadow">⏭️ Neste oppgave</button>
                 <button onclick="showTop3Modal()" class="bg-purple-600 hover:bg-purple-500 p-3 rounded font-bold text-sm shadow">🏆 Vis topp 3</button>
-                <button onclick="restartCompetition()" class="bg-orange-600 hover:bg-orange-500 p-3 rounded font-bold text-sm shadow">🔄 Restart konkurranse</button>
-                <button onclick="completeCompetition()" class="bg-red-600 hover:bg-red-500 p-3 rounded font-bold text-sm shadow col-span-full">🏁 Fullfør Klasse mot klasse</button>
+                <button onclick="completeCompetition()" class="bg-red-600 hover:bg-red-500 p-3 rounded font-bold text-sm shadow">🏁 Fullfør Klasse mot klasse</button>
             </div>
         </div>
 
@@ -188,16 +187,10 @@
         let currentActiveQuestionId = null;
 
         async function initData() {
-            try {
-                const { data: classesData, error: classErr } = await supabase.from('classes').select('*').order('name');
-                if (classErr) console.error("Feil ved henting av klasser:", classErr);
-                allClasses = classesData || [];
-                updateCreatorClassDropdown();
-
-                await loadCompetitionsDropdown();
-            } catch (err) {
-                console.error("Kritisk feil under initData:", err);
-            }
+            const { data: classesData } = await supabase.from('classes').select('*').order('name');
+            allClasses = classesData || [];
+            updateCreatorClassDropdown();
+            await loadCompetitionsDropdown();
         }
 
         async function loadCompetitionsDropdown() {
@@ -205,18 +198,10 @@
             const savedCompId = localStorage.getItem('kmk_active_comp_id');
 
             const { data: comps, error } = await supabase.from('competitions').select('*').order('id', { ascending: false });
-            if (error) {
-                console.error("Supabase-feil ved henting av konkurranser:", error);
-                return;
-            }
+            if (error) return;
 
-            if (!comps || comps.length === 0) {
-                select.innerHTML = '<option value="">-- Ingen konkurranser funnet --</option>';
-                return;
-            }
-
-            select.innerHTML = '<option value="">-- Velg konkurranse --</option>' + comps.map(co => `
-                <option value="${co.id}">${co.title \vert{}\vert{} 'Uten navn'} (Status:${co.status || 'setup'})</option>
+            select.innerHTML = '<option value="">-- Velg konkurranse --</option>' + (comps || []).map(co => `
+                <option value="${co.id}">${co.title} (Status: ${co.status})</option>
             `).join('');
 
             if (savedCompId && select.querySelector(`option[value="${savedCompId}"]`)) {
@@ -278,9 +263,10 @@
             classSelContainer.classList.remove('hidden');
             document.getElementById('liveControlSection').classList.remove('hidden');
 
+            // Hent deltakende klasser for denne konkurransen
             const { data: compData } = await supabase.from('competitions').select('active_class_names').eq('id', compId).single();
             activeCompClasses = compData?.active_class_names || [];
-            window.renderClassCheckboxes(activeCompClasses);
+            renderClassCheckboxes(activeCompClasses);
 
             const { data: questions } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
             currentQuestions = questions || [];
@@ -298,7 +284,7 @@
                 
                 statusBox.innerHTML = isLocked 
                     ? `🔒 SVAR ER LÅST<br><span class="text-white text-base">"${activeQ.question_text}"</span>`
-                    : (isCountdown ? `⏳ NEDTELLING PÅ GANG...` : `🟢 OPPGAVE ÅPEN FOR SVAR!<br><span class="text-white text-base">#${activeQ.sort_order + 1}:${activeQ.question_text}</span>`);
+                    : (isCountdown ? `⏳ NEDTELLING PÅ GANG...` : `🟢 OPPGAVE ÅPEN FOR SVAR!<br><span class="text-white text-base">#${activeQ.sort_order + 1}: ${activeQ.question_text}</span>`);
                 
                 overviewBox.classList.remove('hidden');
 
@@ -439,18 +425,6 @@
             loadQuestionsForCompetition(compId);
         }
 
-        window.restartCompetition = async function() {
-            if (!confirm('Vil du restarte konkurransen? Dette setter alle oppgaver tilbake til ventemodus ("Klar til dyst?").')) return;
-            const compId = document.getElementById('competitionSelect').value;
-            if (!compId) return;
-
-            await supabase.from('competitions').update({ status: 'setup' }).eq('id', compId);
-            await supabase.from('questions').update({ status: 'pending' }).eq('competition_id', compId);
-
-            alert('Konkurransen er restartet!');
-            loadQuestionsForCompetition(compId);
-        }
-
         window.lockAnswersCountdown = async function() {
             const compId = document.getElementById('competitionSelect').value;
             const { data: qList } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
@@ -525,4 +499,265 @@
         async function generateTop3Html(title, compId) {
             document.getElementById('modalTitle').textContent = title;
             const contentDiv = document.getElementById('modalContent');
-            contentDiv.innerHTML = `<p class="text-slate-400 italic">Beregner po
+            contentDiv.innerHTML = `<p class="text-slate-400 italic">Beregner poeng...</p>`;
+            document.getElementById('resultModal').classList.remove('hidden');
+
+            const html = await calculateScores(compId, true);
+            contentDiv.innerHTML = html;
+        }
+
+        async function generateSluttabellHtml(title, compId) {
+            document.getElementById('modalTitle').textContent = title;
+            const contentDiv = document.getElementById('modalContent');
+            contentDiv.innerHTML = `<p class="text-slate-400 italic">Beregner sluttresultater...</p>`;
+            document.getElementById('resultModal').classList.remove('hidden');
+
+            const html = await calculateScores(compId, false);
+            contentDiv.innerHTML = html;
+        }
+
+        async function calculateScores(compId, top3Only = false) {
+            const { data: questions } = await supabase.from('questions').select('*').eq('competition_id', compId);
+            if (!questions || questions.length === 0) return `<p>Ingen oppgaver funnet.</p>`;
+
+            const qIds = questions.map(q => q.id);
+            const { data: answers } = await supabase.from('answers').select('*').in('question_id', qIds);
+            if (!answers || answers.length === 0) return `<p>Ingen innsendte svar registrert ennå.</p>`;
+
+            const qMap = {};
+            questions.forEach(q => { qMap[q.id] = q; });
+
+            const studentStats = {}; 
+            const classStats = {};   
+
+            answers.forEach(a => {
+                const q = qMap[a.question_id];
+                if (!q || q.correct_answer === null || q.correct_answer === undefined) return;
+
+                // NY PROSENTBASERT POENGBEREGNIGN (maks 100 poeng per oppgave, avtar basert på relativ feil)
+                const fasit = Number(q.correct_answer);
+                const svar = Number(a.answer_value);
+                const diff = Math.abs(svar - fasit);
+                
+                let score = 0;
+                if (fasit === 0) {
+                    score = diff === 0 ? 100 : Math.max(0, 100 - diff * 10);
+                } else {
+                    const relError = diff / Math.abs(fasit); // Prosentvis avvik (f.eks. 0.2 = 20% feil)
+                    // Formel: 100 poeng ved 0% feil, faller gradvis. Ved 100% feil eller mer gir det færre poeng.
+                    score = Math.max(0, 100 * Math.exp(-3 * relError)); 
+                }
+
+                const studentKey = `${a.student_name}_${a.class_name}`;
+                if (!studentStats[studentKey]) {
+                    studentStats[studentKey] = { name: a.student_name, className: a.class_name, totalScore: 0, count: 0 };
+                }
+                studentStats[studentKey].totalScore += score;
+                studentStats[studentKey].count += 1;
+
+                if (!classStats[a.class_name]) {
+                    classStats[a.class_name] = { totalScore: 0, totalCount: 0 };
+                }
+                classStats[a.class_name].totalScore += score;
+                classStats[a.class_name].totalCount += 1;
+            });
+
+            // Sorter på HØYEST poengsum (flest poeng er best nå)
+            const studentArray = Object.values(studentStats).map(s => ({
+                name: s.name, className: s.className, avgScore: s.count > 0 ? s.totalScore / s.count : 0
+            })).sort((a, b) => b.avgScore - a.avgScore);
+
+            const classArray = Object.keys(classStats).map(className => {
+                const c = classStats[className];
+                return { className, avgScore: c.totalCount > 0 ? c.totalScore / c.totalCount : 0 };
+            }).sort((a, b) => b.avgScore - a.avgScore);
+
+            let html = `<div class="space-y-6">`;
+            
+            html += `<div><h4 class="text-lg font-bold text-cyan-400 mb-2 border-b border-slate-700 pb-1">⭐ ${top3Only ? 'Topp 3' : 'Alle'} Enkeltelever</h4>`;
+            const studentSlice = top3Only ? studentArray.slice(0, 3) : studentArray;
+            studentSlice.forEach((st, idx) => {
+                const medals = ['🥇', '🥈', '🥉'];
+                const rankPrefix = idx < 3 ? medals[idx] : `#${idx + 1}`;
+                html += `<div class="bg-slate-900 p-2.5 rounded flex justify-between items-center border border-slate-700 mb-1.5">
+                    <span class="font-bold">${rankPrefix} ${st.name} <span class="text-xs text-slate-400 font-normal">(${st.className})</span></span>
+                    <span class="text-xs text-yellow-400 font-mono">Poengsnitt: ${st.avgScore.toFixed(1)} p</span>
+                </div>`;
+            });
+            html += `</div>`;
+
+            html += `<div><h4 class="text-lg font-bold text-yellow-300 mb-2 border-b border-slate-700 pb-1">🏫 ${top3Only ? 'Topp 3' : 'Alle'} Klasser (Poengsnitt)</h4>`;
+            const classSlice = top3Only ? classArray.slice(0, 3) : classArray;
+            classSlice.forEach((cl, idx) => {
+                const medals = ['🥇', '🥈', '🥉'];
+                const rankPrefix = idx < 3 ? medals[idx] : `#${idx + 1}`;
+                html += `<div class="bg-slate-900 p-2.5 rounded flex justify-between items-center border border-slate-700 mb-1.5">
+                    <span class="font-bold">${rankPrefix} ${cl.className}</span>
+                    <span class="text-xs text-emerald-400 font-mono">Klassesnitt: ${cl.avgScore.toFixed(1)} p</span>
+                </div>`;
+            });
+            html += `</div>`;
+
+            html += `</div>`;
+            return html;
+        }
+
+        window.closeModal = function() {
+            document.getElementById('resultModal').classList.add('hidden');
+        }
+
+        window.editQuestion = function(id) {
+            const q = currentQuestions.find(item => item.id === id);
+            if (!q) return;
+            document.getElementById('editingQuestionId').value = q.id;
+            document.getElementById('formTitle').textContent = 'Rediger oppgave';
+            document.getElementById('saveQuestionBtn').textContent = 'Lagre Endringer';
+            document.getElementById('cancelEditBtn').classList.remove('hidden');
+
+            document.getElementById('qText').value = q.question_text;
+            document.getElementById('qCreatorClass').value = q.created_by_class;
+            document.getElementById('qUnitType').value = q.unit_type;
+            document.getElementById('qCustomUnit').value = q.custom_unit || '';
+            
+            if (q.correct_answer === null || q.correct_answer === undefined) {
+                document.querySelector('input[name="fasitMode"][value="unknown"]').checked = true;
+                handleFasitModeChange();
+                document.getElementById('qCorrect').value = '';
+            } else {
+                document.querySelector('input[name="fasitMode"][value="known"]').checked = true;
+                handleFasitModeChange();
+                if (q.unit_type === 'tid') {
+                    document.getElementById('qCorrect').value = formatSecondsToInput(q.correct_answer);
+                } else {
+                    document.getElementById('qCorrect').value = q.correct_answer;
+                }
+            }
+
+            if (q.unit_type === 'tid') {
+                document.getElementById('qMin').value = formatSecondsToInput(q.min_value);
+                document.getElementById('qMax').value = formatSecondsToInput(q.max_value);
+            } else {
+                document.getElementById('qMin').value = q.min_value;
+                document.getElementById('qMax').value = q.max_value;
+            }
+
+            document.getElementById('qStep').value = q.step_value || 1;
+            window.scrollTo({ top: 300, behavior: 'smooth' });
+        }
+
+        window.deleteQuestion = async function(id) {
+            if (!confirm('Slette denne oppgaven?')) return;
+            await supabase.from('questions').delete().eq('id', id);
+            loadQuestionsForCompetition(document.getElementById('competitionSelect').value);
+        }
+
+        document.getElementById('addClassBtn').addEventListener('click', async () => {
+            const name = document.getElementById('classNameInput').value.trim();
+            if (!name) return;
+            await supabase.from('classes').insert([{ name }]);
+            document.getElementById('classNameInput').value = '';
+            initData();
+        });
+
+        document.getElementById('createCompBtn').addEventListener('click', async () => {
+            const titleInput = document.getElementById('compTitle');
+            const title = titleInput.value.trim();
+            if (!title) return;
+            await supabase.from('competitions').insert([{ title, status: 'setup' }]);
+            titleInput.value = '';
+            initData();
+        });
+
+        document.getElementById('competitionSelect').addEventListener('change', (e) => {
+            const compId = e.target.value;
+            if (compId) {
+                localStorage.setItem('kmk_active_comp_id', compId);
+            } else {
+                localStorage.removeItem('kmk_active_comp_id');
+            }
+            loadQuestionsForCompetition(compId);
+        });
+
+        document.getElementById('saveCompClassesBtn').addEventListener('click', async () => {
+            const id = document.getElementById('competitionSelect').value;
+            if (!id) return;
+            const selectedClasses = Array.from(document.querySelectorAll('.comp-class-cb:checked')).map(cb => cb.value);
+            await supabase.from('competitions').update({ active_class_names: selectedClasses }).eq('id', id);
+            alert('Deltakende klasser er lagret!');
+        });
+
+        document.getElementById('saveQuestionBtn').addEventListener('click', async () => {
+            const competition_id = document.getElementById('competitionSelect').value;
+            const question_text = document.getElementById('qText').value.trim();
+            const created_by_class = document.getElementById('qCreatorClass').value;
+            const unit_type = document.getElementById('qUnitType').value;
+            const custom_unit = document.getElementById('qCustomUnit').value.trim();
+            
+            const rawMin = document.getElementById('qMin').value;
+            const rawMax = document.getElementById('qMax').value;
+            const fasitMode = document.querySelector('input[name="fasitMode"]:checked').value;
+            const rawCorrect = document.getElementById('qCorrect').value;
+
+            const min_value = unit_type === 'tid' ? parseInputToSeconds(rawMin) : parseFloat(rawMin);
+            const max_value = unit_type === 'tid' ? parseInputToSeconds(rawMax) : parseFloat(rawMax);
+            const step_value = parseFloat(document.getElementById('qStep').value) || 1;
+            
+            let correct_answer = null;
+            if (fasitMode === 'known') {
+                correct_answer = unit_type === 'tid' ? parseInputToSeconds(rawCorrect) : parseFloat(rawCorrect);
+            }
+
+            const editingId = document.getElementById('editingQuestionId').value;
+
+            if (!competition_id || !question_text || isNaN(min_value) || isNaN(max_value)) {
+                alert('Fyll ut alle felt korrekt.');
+                return;
+            }
+
+            if (editingId) {
+                await supabase.from('questions').update({
+                    question_text, created_by_class, unit_type, custom_unit, min_value, max_value, step_value, correct_answer
+                }).eq('id', editingId);
+            } else {
+                const nextOrder = currentQuestions.length;
+                await supabase.from('questions').insert([{
+                    competition_id, question_text, created_by_class, unit_type, custom_unit, min_value, max_value, step_value, correct_answer, status: 'pending', sort_order: nextOrder
+                }]);
+            }
+
+            document.getElementById('editingQuestionId').value = '';
+            document.getElementById('formTitle').textContent = '2. Opprett oppgave';
+            document.getElementById('saveQuestionBtn').textContent = 'Lagre Oppgave';
+            document.getElementById('cancelEditBtn').classList.add('hidden');
+            document.getElementById('qText').value = '';
+            document.getElementById('qMin').value = '';
+            document.getElementById('qMax').value = '';
+            document.getElementById('qCorrect').value = '';
+            document.querySelector('input[name="fasitMode"][value="known"]').checked = true;
+            handleFasitModeChange();
+
+            loadQuestionsForCompetition(competition_id);
+        });
+
+        document.getElementById('cancelEditBtn').classList.add('hidden');
+
+        function parseInputToSeconds(valueStr) {
+            if (!valueStr && valueStr !== 0) return null;
+            valueStr = String(valueStr).trim();
+            if (valueStr.includes(':')) {
+                const parts = valueStr.split(':');
+                return (parseFloat(parts[0]) || 0) * 60 + (parseFloat(parts[1]) || 0);
+            }
+            return parseFloat(valueStr);
+        }
+
+        function formatSecondsToInput(totalSeconds) {
+            const mins = Math.floor(totalSeconds / 60);
+            const secs = Math.round(totalSeconds % 60);
+            return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        }
+
+        initData();
+    </script>
+</body>
+</html>
