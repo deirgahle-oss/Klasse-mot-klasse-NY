@@ -61,7 +61,17 @@
             </div>
         </div>
 
-        <!-- Live oversikt over hvem som har levert + Deltakerliste med sletting -->
+        <!-- Felt for å registrere fasit underveis hvis den ikke var kjent -->
+        <div id="liveCorrectAnswerSection" class="bg-slate-800 p-6 rounded-xl shadow border border-amber-500/50 space-y-3 hidden">
+            <h3 class="text-lg font-semibold text-amber-400">✏️ Registrer fasit for aktiv oppgave</h3>
+            <p class="text-xs text-slate-400">Denne oppgaven ble opprettet med ukjent fasit på forhånd. Registrer fasiten her før du viser resultater:</p>
+            <div class="flex gap-2">
+                <input type="text" id="liveCorrectInput" placeholder="F.eks. 20:45 eller 150" class="w-full p-2.5 rounded bg-slate-900 border border-slate-700 text-white">
+                <button onclick="saveLiveCorrectAnswer()" class="bg-amber-600 hover:bg-amber-500 px-5 py-2.5 rounded font-bold">Lagre fasit</button>
+            </div>
+        </div>
+
+        <!-- Live oversikt over hvem som har levert + Deltakerliste -->
         <div id="liveAnswersOverview" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-6 hidden">
             <div>
                 <h3 class="text-lg font-semibold text-cyan-300 mb-3">📊 Innsendte svar på aktiv oppgave</h3>
@@ -124,9 +134,24 @@
                 </div>
             </div>
 
-            <div>
-                <label class="block text-sm mb-1">Fasit:</label>
-                <input type="text" id="qCorrect" placeholder="F.eks. 1:15" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+            <!-- Fasit-valg -->
+            <div class="space-y-3 bg-slate-900 p-4 rounded border border-slate-700">
+                <label class="block text-sm font-semibold text-yellow-300">Fasit-alternativ:</label>
+                <div class="flex gap-4">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="fasitMode" value="known" checked onchange="handleFasitModeChange()" class="accent-cyan-500">
+                        <span>Fasit kjent på forhånd</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="fasitMode" value="unknown" onchange="handleFasitModeChange()" class="accent-cyan-500">
+                        <span>Fasit ikke kjent på forhånd</span>
+                    </label>
+                </div>
+
+                <div id="knownFasitContainer">
+                    <label class="block text-sm mb-1 mt-2">Fasit:</label>
+                    <input type="text" id="qCorrect" placeholder="F.eks. 20:45 eller 150" class="w-full p-2 rounded bg-slate-800 border border-slate-600 text-white">
+                </div>
             </div>
 
             <div class="flex gap-4">
@@ -158,12 +183,12 @@
         let allClasses = [];
         let activeCompClasses = [];
         let liveAnswersInterval = null;
+        let currentActiveQuestionId = null;
 
         async function initData() {
             const { data: classesData } = await supabase.from('classes').select('*').order('name');
             allClasses = classesData || [];
             updateCreatorClassDropdown();
-
             await loadCompetitionsDropdown();
         }
 
@@ -172,10 +197,7 @@
             const savedCompId = localStorage.getItem('kmk_active_comp_id');
 
             const { data: comps, error } = await supabase.from('competitions').select('*').order('id', { ascending: false });
-            if (error) {
-                console.error('Feil ved henting av konkurranser:', error);
-                return;
-            }
+            if (error) return;
 
             select.innerHTML = '<option value="">-- Velg konkurranse --</option>' + (comps || []).map(co => `
                 <option value="${co.id}">${co.title} (Status: ${co.status})</option>
@@ -209,17 +231,26 @@
             else container.classList.add('hidden');
         }
 
+        window.handleFasitModeChange = function() {
+            const mode = document.querySelector('input[name="fasitMode"]:checked').value;
+            const container = document.getElementById('knownFasitContainer');
+            if (mode === 'unknown') container.classList.add('hidden');
+            else container.classList.remove('hidden');
+        }
+
         async function loadQuestionsForCompetition(compId) {
             const section = document.getElementById('questionListSection');
             const questionFormSec = document.getElementById('questionSection');
             const container = document.getElementById('questionsContainer');
             const overviewBox = document.getElementById('liveAnswersOverview');
+            const liveCorrectSec = document.getElementById('liveCorrectAnswerSection');
 
             if (!compId) {
                 section.classList.add('hidden');
                 questionFormSec.classList.add('hidden');
                 document.getElementById('liveControlSection').classList.add('hidden');
                 overviewBox.classList.add('hidden');
+                liveCorrectSec.classList.add('hidden');
                 if (liveAnswersInterval) clearInterval(liveAnswersInterval);
                 return;
             }
@@ -238,6 +269,7 @@
             const statusBox = document.getElementById('activeLiveStatus');
 
             if (activeQ) {
+                currentActiveQuestionId = activeQ.id;
                 const isLocked = activeQ.status === 'locked';
                 const isCountdown = activeQ.status === 'countdown';
                 statusBox.className = isLocked 
@@ -249,11 +281,21 @@
                     : (isCountdown ? `⏳ NEDTELLING PÅ GANG...` : `🟢 OPPGAVE ÅPEN FOR SVAR!<br><span class="text-white text-base">#${activeQ.sort_order + 1}: ${activeQ.question_text}</span>`);
                 
                 overviewBox.classList.remove('hidden');
+
+                // Vis felt for å registrere ukjent fasit hvis oppgaven er låst og fasit mangler
+                if (isLocked && (activeQ.correct_answer === null || activeQ.correct_answer === undefined)) {
+                    liveCorrectSec.classList.remove('hidden');
+                } else {
+                    liveCorrectSec.classList.add('hidden');
+                }
+
                 startLivePolling(activeQ.id, compId);
             } else {
+                currentActiveQuestionId = null;
                 statusBox.className = "p-4 rounded-xl border border-slate-600 bg-slate-900 text-slate-300 text-center font-bold text-lg";
                 statusBox.textContent = "Status: Ingen aktiv oppgave pågår.";
                 overviewBox.classList.add('hidden');
+                liveCorrectSec.classList.add('hidden');
                 if (liveAnswersInterval) clearInterval(liveAnswersInterval);
             }
 
@@ -271,6 +313,25 @@
                     </div>
                 </div>
             `).join('');
+        }
+
+        window.saveLiveCorrectAnswer = async function() {
+            if (!currentActiveQuestionId) return;
+            const rawVal = document.getElementById('liveCorrectInput').value;
+            // Sjekk om det er tid (min:sek) eller vanlig tall
+            const activeQ = currentQuestions.find(q => q.id === currentActiveQuestionId);
+            const correct_answer = activeQ.unit_type === 'tid' ? parseInputToSeconds(rawVal) : parseFloat(rawVal);
+
+            if (isNaN(correct_answer)) {
+                alert('Vennligst skriv inn en gyldig fasit.');
+                return;
+            }
+
+            await supabase.from('questions').update({ correct_answer }).eq('id', currentActiveQuestionId);
+            document.getElementById('liveCorrectInput').value = '';
+            document.getElementById('liveCorrectAnswerSection').classList.add('hidden');
+            alert('Fasit er lagret og sendt ut til elevtelefonene!');
+            loadQuestionsForCompetition(document.getElementById('competitionSelect').value);
         }
 
         function startLivePolling(questionId, compId) {
@@ -541,15 +602,27 @@
             document.getElementById('qUnitType').value = q.unit_type;
             document.getElementById('qCustomUnit').value = q.custom_unit || '';
             
-            // Konverter fra sekunder til min:sek ved redigering hvis enheten er tid
+            // Sjekk om fasit er kjent eller ukjent
+            if (q.correct_answer === null || q.correct_answer === undefined) {
+                document.querySelector('input[name="fasitMode"][value="unknown"]').checked = true;
+                handleFasitModeChange();
+                document.getElementById('qCorrect').value = '';
+            } else {
+                document.querySelector('input[name="fasitMode"][value="known"]').checked = true;
+                handleFasitModeChange();
+                if (q.unit_type === 'tid') {
+                    document.getElementById('qCorrect').value = formatSecondsToInput(q.correct_answer);
+                } else {
+                    document.getElementById('qCorrect').value = q.correct_answer;
+                }
+            }
+
             if (q.unit_type === 'tid') {
                 document.getElementById('qMin').value = formatSecondsToInput(q.min_value);
                 document.getElementById('qMax').value = formatSecondsToInput(q.max_value);
-                document.getElementById('qCorrect').value = q.correct_answer !== null ? formatSecondsToInput(q.correct_answer) : '';
             } else {
                 document.getElementById('qMin').value = q.min_value;
                 document.getElementById('qMax').value = q.max_value;
-                document.getElementById('qCorrect').value = q.correct_answer !== null ? q.correct_answer : '';
             }
 
             document.getElementById('qStep').value = q.step_value || 1;
@@ -605,12 +678,18 @@
             
             const rawMin = document.getElementById('qMin').value;
             const rawMax = document.getElementById('qMax').value;
+            const fasitMode = document.querySelector('input[name="fasitMode"]:checked').value;
             const rawCorrect = document.getElementById('qCorrect').value;
 
             const min_value = unit_type === 'tid' ? parseInputToSeconds(rawMin) : parseFloat(rawMin);
             const max_value = unit_type === 'tid' ? parseInputToSeconds(rawMax) : parseFloat(rawMax);
             const step_value = parseFloat(document.getElementById('qStep').value) || 1;
-            const correct_answer = unit_type === 'tid' ? parseInputToSeconds(rawCorrect) : parseFloat(rawCorrect);
+            
+            let correct_answer = null;
+            if (fasitMode === 'known') {
+                correct_answer = unit_type === 'tid' ? parseInputToSeconds(rawCorrect) : parseFloat(rawCorrect);
+            }
+
             const editingId = document.getElementById('editingQuestionId').value;
 
             if (!competition_id || !question_text || isNaN(min_value) || isNaN(max_value)) {
@@ -637,6 +716,8 @@
             document.getElementById('qMin').value = '';
             document.getElementById('qMax').value = '';
             document.getElementById('qCorrect').value = '';
+            document.querySelector('input[name="fasitMode"][value="known"]').checked = true;
+            handleFasitModeChange();
 
             loadQuestionsForCompetition(competition_id);
         });
