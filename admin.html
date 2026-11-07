@@ -31,12 +31,9 @@
 
             <div>
                 <label class="block text-sm mb-1 font-semibold">Velg aktiv konkurranse:</label>
-                <div class="flex gap-2">
-                    <select id="competitionSelect" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
-                        <option value="">-- Velg konkurranse --</option>
-                    </select>
-                    <button onclick="deleteCurrentCompetition()" class="bg-red-700 hover:bg-red-600 px-4 py-2 rounded font-bold text-sm whitespace-nowrap" title="Slett valgte konkurranse">🗑️ Slett konkurranse</button>
-                </div>
+                <select id="competitionSelect" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                    <option value="">-- Velg konkurranse --</option>
+                </select>
             </div>
 
             <!-- Klassevelger for den aktive konkurransen -->
@@ -219,7 +216,7 @@
             }
 
             select.innerHTML = '<option value="">-- Velg konkurranse --</option>' + comps.map(co => `
-                <option value="${co.id}">${co.title || 'Uten navn'} (Status: ${co.status || 'setup'})</option>
+                <option value="${co.id}">${co.title \vert{}\vert{} 'Uten navn'} (Status:${co.status || 'setup'})</option>
             `).join('');
 
             if (savedCompId && select.querySelector(`option[value="${savedCompId}"]`)) {
@@ -301,7 +298,7 @@
                 
                 statusBox.innerHTML = isLocked 
                     ? `🔒 SVAR ER LÅST<br><span class="text-white text-base">"${activeQ.question_text}"</span>`
-                    : (isCountdown ? `⏳ NEDTELLING PÅ GANG...` : `🟢 OPPGAVE ÅPEN FOR SVAR!<br><span class="text-white text-base">#${activeQ.sort_order + 1}: ${activeQ.question_text}</span>`);
+                    : (isCountdown ? `⏳ NEDTELLING PÅ GANG...` : `🟢 OPPGAVE ÅPEN FOR SVAR!<br><span class="text-white text-base">#${activeQ.sort_order + 1}:${activeQ.question_text}</span>`);
                 
                 overviewBox.classList.remove('hidden');
 
@@ -454,33 +451,6 @@
             loadQuestionsForCompetition(compId);
         }
 
-        window.deleteCurrentCompetition = async function() {
-            const compId = document.getElementById('competitionSelect').value;
-            if (!compId) {
-                alert('Vennligst velg en konkurranse å slette først.');
-                return;
-            }
-
-            if (!confirm('Er du sikker på at du vil slette denne konkurransen? Alle oppgaver og innsendte svar vil bli permanent slettet.')) return;
-
-            const { data: qList } = await supabase.from('questions').select('id').eq('competition_id', compId);
-            if (qList && qList.length > 0) {
-                const qIds = qList.map(q => q.id);
-                await supabase.from('answers').delete().in('question_id', qIds);
-                await supabase.from('questions').delete().eq('competition_id', compId);
-            }
-
-            const { error } = await supabase.from('competitions').delete().eq('id', compId);
-            if (error) {
-                alert('Kunne ikke slette konkurranse: ' + error.message);
-                return;
-            }
-
-            localStorage.removeItem('kmk_active_comp_id');
-            alert('Konkurransen er slettet.');
-            initData();
-        }
-
         window.lockAnswersCountdown = async function() {
             const compId = document.getElementById('competitionSelect').value;
             const { data: qList } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
@@ -555,8 +525,4 @@
         async function generateTop3Html(title, compId) {
             document.getElementById('modalTitle').textContent = title;
             const contentDiv = document.getElementById('modalContent');
-            contentDiv.innerHTML = `<p class="text-slate-400 italic">Beregner poeng...</p>`;
-            document.getElementById('resultModal').classList.remove('hidden');
-
-            const html = await calculateScores(compId, true);
-            content
+            contentDiv.innerHTML = `<p class="text-slate-400 italic">Beregner po
