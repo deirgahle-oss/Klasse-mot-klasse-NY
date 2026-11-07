@@ -73,14 +73,12 @@
                     <div class="mb-4">
                         <span class="text-xs text-slate-400 uppercase tracking-widest block">Ditt svar</span>
                         <span id="currentValDisplay" class="text-4xl font-extrabold text-cyan-400">0</span>
-                        <!-- Enhetsteksten er fjernet her slik at det kun vises verdi/tidspunkt -->
                     </div>
 
                     <div class="relative w-full h-24 bg-slate-900 rounded-lg overflow-hidden border border-slate-700 flex items-center">
                         <div class="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-1 bg-yellow-400 z-10 pointer-events-none shadow-[0_0_10px_#facc15]"></div>
                         <div class="absolute left-1/2 -translate-x-1/2 -top-1 w-3 h-3 bg-yellow-400 rotate-45 z-10 pointer-events-none"></div>
 
-                        <!-- Doblet tetthet på hakkene (min-w-[15px]) -->
                         <div id="rulerContainer" class="w-full overflow-x-auto no-scrollbar px-[50%] flex items-center h-full cursor-grab active:cursor-grabbing" onscroll="handleRulerScroll()">
                             <div id="rulerTrack" class="flex items-center gap-4 h-full text-xs text-slate-500 font-mono"></div>
                         </div>
@@ -202,6 +200,14 @@
 
             const { data: comp } = await supabase.from('competitions').select('status').eq('id', currentCompId).single();
             
+            // Hvis konkurransen er restartet (status 'setup') eller aktiv uten start på oppgaver
+            if (comp && comp.status === 'setup') {
+                activeQuestion = null;
+                lastRenderedStatusKey = null;
+                showView('waitingView');
+                return;
+            }
+
             if (comp && (comp.status === 'top3' || comp.status === 'completed')) {
                 showResultView(comp.status === 'completed' ? '🏁 Sluttresultat' : '🏆 Topp 3 Oversikt', currentCompId);
                 return;
@@ -329,7 +335,7 @@
 
             for (let val = min; val <= max; val += step) {
                 const tick = document.createElement('div');
-                tick.className = 'flex flex-col items-center justify-end h-12 min-w-[15px] cursor-pointer'; // Tettere hakk
+                tick.className = 'flex flex-col items-center justify-end h-12 min-w-[15px] cursor-pointer';
                 const displayValStr = unitType === 'tid' ? formatTime(val) : val;
 
                 tick.innerHTML = `
