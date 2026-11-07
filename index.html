@@ -155,9 +155,12 @@
 
         async function loadAllowedClassesForDropdown(comp) {
             let activeClasses = [];
-            if (comp && comp.active_class_names) {
+
+            // Bruk KUN klasser som er spesifikt krysset av for denne konkurransen
+            if (comp && comp.active_class_names && comp.active_class_names.length > 0) {
                 activeClasses = comp.active_class_names;
             } else {
+                // Fallback hvis ingen er lagret enda: hent alle klasser fra databasen
                 const { data } = await supabase.from('classes').select('*').order('name');
                 activeClasses = (data || []).map(c => c.name);
             }
@@ -187,7 +190,7 @@
         }
 
         function showView(viewId) {
-            if (lastRenderedView === viewId && viewId !== 'questionView') return; // Unngå unødvendig re-rendering (blinking)
+            if (lastRenderedView === viewId && viewId !== 'questionView') return;
             lastRenderedView = viewId;
 
             ['classSelectView', 'waitingView', 'questionView', 'resultView'].forEach(id => {
@@ -242,7 +245,6 @@
                         document.getElementById('activeAnswerView').classList.add('hidden');
                         document.getElementById('submittedConfirmView').classList.remove('hidden');
                         
-                        // Sjekk fasit
                         let fasitText = "";
                         if (activeQ.correct_answer !== null && activeQ.correct_answer !== undefined) {
                             const formattedCorrect = activeQ.unit_type === 'tid' ? formatTime(activeQ.correct_answer) : activeQ.correct_answer;
@@ -400,7 +402,7 @@
 
             document.getElementById('activeAnswerView').classList.add('hidden');
             document.getElementById('submittedConfirmView').classList.remove('hidden');
-            document.getElementById('lockStatusTexttextContent') = "Svaret ditt er låst inn!";
+            document.getElementById('lockStatusText').textContent = "Svaret ditt er låst inn!";
         }
 
         async function autoSubmitAnswer() {
@@ -420,7 +422,7 @@
         }
 
         async function showResultView(title, compId) {
-            if (lastRenderedView === 'resultView') return; // Forhindre blinking hvis den allerede vises
+            if (lastRenderedView === 'resultView') return;
             showView('resultView');
             document.getElementById('resultViewTitle').textContent = title;
             const contentDiv = document.getElementById('resultViewContent');
