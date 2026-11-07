@@ -575,10 +575,16 @@
             const unit_type = document.getElementById('qUnitType').value;
             const custom_unit = document.getElementById('qCustomUnit').value.trim();
             
-            const min_value = parseFloat(document.getElementById('qMin').value);
-            const max_value = parseFloat(document.getElementById('qMax').value);
+            // Hent verdier og konverter fra min:sek til sekunder hvis enheten er 'tid'
+            const rawMin = document.getElementById('qMin').value;
+            const rawMax = document.getElementById('qMax').value;
+            const rawCorrect = document.getElementById('qCorrect').value;
+
+            const min_value = unit_type === 'tid' ? parseInputToSeconds(rawMin) : parseFloat(rawMin);
+            const max_value = unit_type === 'tid' ? parseInputToSeconds(rawMax) : parseFloat(rawMax);
             const step_value = parseFloat(document.getElementById('qStep').value) || 1;
-            const correct_answer = parseFloat(document.getElementById('qCorrect').value);
+            const correct_answer = unit_type === 'tid' ? parseInputToSeconds(rawCorrect) : parseFloat(rawCorrect);
+            
             const editingId = document.getElementById('editingQuestionId').value;
 
             if (!competition_id || !question_text || isNaN(min_value) || isNaN(max_value)) {
@@ -596,6 +602,29 @@
                     competition_id, question_text, created_by_class, unit_type, custom_unit, min_value, max_value, step_value, correct_answer, status: 'pending', sort_order: nextOrder
                 }]);
             }
+
+            document.getElementById('editingQuestionId').value = '';
+            document.getElementById('formTitle').textContent = '2. Opprett oppgave';
+            document.getElementById('saveQuestionBtn').textContent = 'Lagre Oppgave';
+            document.getElementById('cancelEditBtn').classList.add('hidden');
+            document.getElementById('qText').value = '';
+            document.getElementById('qMin').value = '';
+            document.getElementById('qMax').value = '';
+            document.getElementById('qCorrect').value = '';
+
+            loadQuestionsForCompetition(competition_id);
+        });
+
+        // Hjelpefunksjon for å gjøre om min:sek (f.eks. "30:00") til totalt antall sekunder (f.eks. 1800)
+        function parseInputToSeconds(valueStr) {
+            if (!valueStr && valueStr !== 0) return null;
+            valueStr = String(valueStr).trim();
+            if (valueStr.includes(':')) {
+                const parts = valueStr.split(':');
+                return (parseFloat(parts[0]) || 0) * 60 + (parseFloat(parts[1]) || 0);
+            }
+            return parseFloat(valueStr);
+        }
 
             document.getElementById('editingQuestionId').value = '';
             document.getElementById('formTitle').textContent = '2. Opprett oppgave';
