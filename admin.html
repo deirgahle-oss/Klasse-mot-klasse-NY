@@ -47,7 +47,6 @@
         <div id="liveControlSection" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4 hidden">
             <h2 class="text-xl font-semibold text-emerald-400">🎮 Live Spillkontroller</h2>
             
-            <!-- Tydeligere og mer synlig statusboks -->
             <div id="activeLiveStatus" class="p-4 rounded-xl border border-slate-600 bg-slate-900 text-slate-300 text-center font-bold text-lg">
                 Status: Ingen aktiv oppgave pågår.
             </div>
@@ -62,7 +61,7 @@
             </div>
         </div>
 
-        <!-- Legg til / Rediger Spørsmål -->
+        <!-- Opprett / Rediger Spørsmål -->
         <div id="questionSection" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4 hidden">
             <h2 id="formTitle" class="text-xl font-semibold text-cyan-400">2. Opprett oppgave</h2>
             <input type="hidden" id="editingQuestionId" value="">
@@ -130,7 +129,7 @@
         </div>
     </div>
 
-    <!-- Modal for Topp 3 eller Sluttresultat -->
+    <!-- Modal -->
     <div id="resultModal" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
         <div class="bg-slate-800 border border-slate-700 rounded-xl max-w-lg w-full p-6 space-y-4 max-h-[80vh] overflow-y-auto">
             <h3 id="modalTitle" class="text-2xl font-bold text-yellow-400">Resultat</h3>
@@ -203,7 +202,6 @@
             const { data: questions } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
             currentQuestions = questions || [];
 
-            // Oppdater live-statusvisning basert på faktisk aktiv oppgave
             const activeQ = currentQuestions.find(q => q.status === 'active');
             const lockedQ = currentQuestions.find(q => q.status === 'locked');
             const statusBox = document.getElementById('activeLiveStatus');
@@ -224,7 +222,6 @@
                 return;
             }
 
-            // Inkluderer pilknappene (flytt opp/ned) på nytt her
             container.innerHTML = currentQuestions.map((q, index) => `
                 <div class="bg-slate-900 p-4 rounded border border-slate-700 flex justify-between items-center">
                     <div>
@@ -256,37 +253,47 @@
                 await supabase.from('questions').update({ sort_order: i }).eq('id', currentQuestions[i].id);
             }
 
-            const compId = document.getElementById('competitionSelect').value;
-            loadQuestionsForCompetition(compId);
+            loadQuestionsForCompetition(document.getElementById('competitionSelect').value);
         }
 
-        // --- LIVE SPILLKONTROLLER ---
+        // --- LIVE SPILLKONTROLLER (Uten irriterende pop-up-bekreftelser) ---
         window.startKlasseMotKlasse = async function() {
             const compId = document.getElementById('competitionSelect').value;
-            if (!compId || currentQuestions.length === 0) return alert('Ingen oppgaver funnet.');
+            if (!compId || currentQuestions.length === 0) {
+                alert('Feil: Ingen aktiv konkurranse eller oppgaver funnet.');
+                return;
+            }
             
             const firstQ = currentQuestions[0];
-            await supabase.from('questions').update({ status: 'active' }).eq('id', firstQ.id);
-            await loadQuestionsForCompetition(compId);
-            alert('Første oppgave er startet på elevtelefonene!');
+            const { error } = await supabase.from('questions').update({ status: 'active' }).eq('id', firstQ.id);
+            if (error) {
+                alert('Kunne ikke starte oppgaven: ' + error.message);
+                return;
+            }
+            loadQuestionsForCompetition(compId);
         }
 
         window.lockAnswersCountdown = async function() {
             const compId = document.getElementById('competitionSelect').value;
-            // Hent fersk liste for å sikre at vi treffer riktig oppgave
             const { data: qList } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
             const activeQ = (qList || []).find(q => q.status === 'active');
             
-            if (!activeQ) return alert('Ingen aktiv oppgave å låse. Trykk "Start klasse mot klasse" eller "Neste oppgave" først.');
+            if (!activeQ) {
+                alert('Fant ingen aktiv oppgave å låse. Start en oppgave først.');
+                return;
+            }
 
             for (let i = 5; i > 0; i--) {
                 document.getElementById('activeLiveStatus').textContent = `⏳ Låser om ${i} sekunder...`;
                 await new Promise(r => setTimeout(r, 1000));
             }
 
-            await supabase.from('questions').update({ status: 'locked' }).eq('id', activeQ.id);
-            await loadQuestionsForCompetition(compId);
-            alert('Tiden er ute! Svarene er låst.');
+            const { error } = await supabase.from('questions').update({ status: 'locked' }).eq('id', activeQ.id);
+            if (error) {
+                alert('Feil ved låsing av svar: ' + error.message);
+                return;
+            }
+            loadQuestionsForCompetition(compId);
         }
 
         window.openAnswersAgain = async function() {
@@ -294,11 +301,17 @@
             const { data: qList } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
             const targetQ = (qList || []).find(q => q.status === 'locked' || q.status === 'active');
             
-            if (!targetQ) return alert('Ingen aktuell oppgave å åpne.');
+            if (!targetQ) {
+                alert('Fant ingen aktuell oppgave å åpne.');
+                return;
+            }
 
-            await supabase.from('questions').update({ status: 'active' }).eq('id', targetQ.id);
-            await loadQuestionsForCompetition(compId);
-            alert('Svarene er åpnet igjen.');
+            const { error } = await supabase.from('questions').update({ status: 'active' }).eq('id', targetQ.id);
+            if (error) {
+                alert('Kunne ikke åpne svar: ' + error.message);
+                return;
+            }
+            loadQuestionsForCompetition(compId);
         }
 
         window.nextQuestion = async function() {
@@ -313,15 +326,18 @@
 
             const nextIndex = currentIndex === -1 ? 0 : currentIndex + 1;
             if (!qList || nextIndex >= qList.length) {
-                alert('Dette var siste oppgave!');
-                await loadQuestionsForCompetition(compId);
+                alert('Dette var siste oppgave i konkurransen!');
+                loadQuestionsForCompetition(compId);
                 return;
             }
 
             const nextQ = qList[nextIndex];
-            await supabase.from('questions').update({ status: 'active' }).eq('id', nextQ.id);
-            await loadQuestionsForCompetition(compId);
-            alert('Neste oppgave er sendt ut til elevene!');
+            const { error } = await supabase.from('questions').update({ status: 'active' }).eq('id', nextQ.id);
+            if (error) {
+                alert('Kunne ikke aktivere neste oppgave: ' + error.message);
+                return;
+            }
+            loadQuestionsForCompetition(compId);
         }
 
         window.showTop3Modal = function() {
@@ -341,7 +357,6 @@
             document.getElementById('resultModal').classList.add('hidden');
         }
 
-        // Global redigeringsfunksjon
         window.editQuestion = function(id) {
             const q = currentQuestions.find(item => item.id === id);
             if (!q) return;
@@ -367,8 +382,35 @@
             loadQuestionsForCompetition(document.getElementById('competitionSelect').value);
         }
 
+        document.getElementById('addClassBtn').addEventListener('click', async () => {
+            const name = document.getElementById('classNameInput').value.trim();
+            if (!name) return;
+            const { error } = await supabase.from('classes').insert([{ name }]);
+            if (error) { alert('Feil: ' + error.message); return; }
+            document.getElementById('classNameInput').value = '';
+            initData();
+        });
+
+        document.getElementById('createCompBtn').addEventListener('click', async () => {
+            const titleInput = document.getElementById('compTitle');
+            const title = titleInput.value.trim();
+            if (!title) return;
+            const { error } = await supabase.from('competitions').insert([{ title, status: 'setup' }]);
+            if (error) { alert('Feil: ' + error.message); return; }
+            titleInput.value = '';
+            initData();
+        });
+
         document.getElementById('competitionSelect').addEventListener('change', (e) => {
             loadQuestionsForCompetition(e.target.value);
+        });
+
+        document.getElementById('saveCompClassesBtn').addEventListener('click', async () => {
+            const id = document.getElementById('competitionSelect').value;
+            if (!id) return;
+            const selectedClasses = Array.from(document.querySelectorAll('.comp-class-cb:checked')).map(cb => cb.value);
+            const { error } = await supabase.from('competitions').update({ active_class_names: selectedClasses }).eq('id', id);
+            if (error) alert('Feil ved lagring: ' + error.message);
         });
 
         initData();
