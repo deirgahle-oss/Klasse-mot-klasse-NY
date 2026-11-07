@@ -63,7 +63,7 @@
             <div id="blockedView" class="bg-red-900/40 border border-red-600 p-6 rounded-xl space-y-3 hidden">
                 <div class="text-4xl">🛑</div>
                 <h3 class="text-xl font-bold text-red-400">Dere har laget denne oppgaven!</h3>
-                <p class="text-sm text-slate-300">Ettersom klassen din har forfattet dette spørsmålet, kan dere ikke delta med svar på akkurat denne runden. Følg med på storskjermen!</p>
+                <p class="text-sm text-slate-300">Ettersom klassen din har forfattet dette spørsmålet, kan dere ikke delta med svar på akkurat denne runden. Følg med på skjermen!</p>
             </div>
 
             <!-- Målebånd-kontroller -->
@@ -92,8 +92,14 @@
             <div id="submittedConfirmView" class="bg-emerald-900/40 border border-emerald-600 p-6 rounded-xl space-y-3 hidden">
                 <div class="text-4xl">✅</div>
                 <h3 class="text-xl font-bold text-emerald-400">Svaret ditt er låst inn!</h3>
-                <p class="text-sm text-slate-300">Følg med på storskjermen for å se fasiten.</p>
+                <p id="lockStatusText" class="text-sm text-slate-300">Følg med på skjermen for å se fasiten.</p>
             </div>
+        </div>
+
+        <!-- 4. Resultatskjerm / Topp 3 / Sluttresultat på mobil -->
+        <div id="resultView" class="w-full max-w-md space-y-4 hidden text-left bg-slate-800 p-6 rounded-xl border border-slate-700">
+            <h2 id="resultViewTitle" class="text-2xl font-bold text-yellow-400 text-center">🏆 Resultat</h2>
+            <div id="resultViewContent" class="space-y-4 text-slate-300 max-h-[60vh] overflow-y-auto"></div>
         </div>
     </main>
 
@@ -109,9 +115,9 @@
         let currentCompId = null;
         let activeQuestion = null;
         let currentNumericValue = 0;
+        let lastKnownQuestionStatus = null;
 
         async function init() {
-            // Finn aktiv konkurranse (den nyeste, eller hent fra URL om spesifisert)
             const urlParams = new URLSearchParams(window.location.search);
             const compParam = urlParams.get('comp');
 
@@ -135,7 +141,7 @@
                 document.getElementById('loggedClassInfo').textContent = `Klasse: ${myClass}`;
                 showView('waitingView');
                 await fetchActiveQuestion();
-                setInterval(fetchActiveQuestion, 3000);
+                setInterval(fetchActiveQuestion, 2500);
             }
         }
 
@@ -144,7 +150,6 @@
             if (comp && comp.active_class_names) {
                 activeClasses = comp.active_class_names;
             } else {
-                // Fallback hvis ingen spesifikke klasser er valgt enda: hent alle
                 const { data } = await supabase.from('classes').select('*').order('name');
                 activeClasses = (data || []).map(c => c.name);
             }
@@ -159,14 +164,8 @@
             const name = document.getElementById('studentNameInput').value.trim();
             const val = document.getElementById('classDropdown').value;
             
-            if (!name) {
-                alert('Vennligst skriv inn navnet ditt.');
-                return;
-            }
-            if (!val) {
-                alert('Vennligst velg en klasse.');
-                return;
-            }
+            if (!name) { alert('Vennligst skriv inn navnet ditt.'); return; }
+            if (!val) { alert('Vennligst velg en klasse.'); return; }
 
             localStorage.setItem('kmk_student_name', name);
             localStorage.setItem('kmk_class_name', val);
@@ -180,7 +179,7 @@
         }
 
         function showView(viewId) {
-            ['classSelectView', 'waitingView', 'questionView'].forEach(id => {
+            ['classSelectView', 'waitingView', 'questionView', 'resultView'].forEach(id => {
                 document.getElementById(id).classList.add('hidden');
             });
             document.getElementById(viewId).classList.remove('hidden');
@@ -192,20 +191,35 @@
             const { data: questions } = await supabase.from('questions')
                 .select('*')
                 .eq('competition_id', currentCompId)
-                .eq('status', 'active')
-                .limit(1);
+                .order('sort_order');
 
-            if (!questions || questions.length === 0) {
-                if (document.getElementById('questionView').classList.contains('hidden') === false) {
-                    showView('waitingView');
+            if (!questions || questions.length === 0) return;
+
+            // Sjekk om konkurransen er ferdig eller om det vises toppliste (vi kan sjekke om alle er done eller om en aktiv/locked finnes)
+            const activeQ = questions.find(q => q.status === 'active' || q.status === 'locked');
+
+            if (!activeQ) {
+                // Ingen aktive oppgaver. Hvis vi nettopp var på et spørsmål som ble låst, vis venteskjerm eller resultat
+                if (document.getElementById('questionView').classList.contains('hidden') === false && lastKnownQuestionStatus === 'locked') {
+                    // Vis en melding om at oppgaven er ferdig
+                    document.getElementById('lockStatusText').textContent = "Tiden er ute! Venter på neste oppgave eller toppliste fra arrangør...";
                 }
                 return;
             }
 
-            const q = questions[0];
-            if (!activeQuestion || activeQuestion.id !== q.id) {
-                activeQuestion = q;
-                setupQuestionUI(q);
+            lastKnownQuestionStatus = activeQ.status;
+
+            if (!activeQuestion || activeQuestion.id !== activeQ.id) {
+                activeQuestion = activeQ;
+                setupQuestionUI(activeQ);
+            } else if (activeQuestion.status !== activeQ.status) {
+                // Status har endret seg (f.eks. fra active til locked)
+                activeQuestion.status = activeQ.status;
+                if (activeQ.status === 'locked') {
+                    document.getElementById('activeAnswerView').classList.add('hidden');
+                    document.getElementById('submittedConfirmView').classList.remove('hidden');
+                    document.getElementById('lockStatusText').textContent = "Tiden er ute! Svarene er låst av arrangør.";
+                }
             }
         }
 
@@ -216,16 +230,23 @@
 
             const blockedView = document.getElementById('blockedView');
             const activeAnswerView = document.getElementById('activeAnswerView');
+            const submittedConfirmView = document.getElementById('submittedConfirmView');
 
             if (q.created_by_class === myClass) {
                 blockedView.classList.remove('hidden');
                 activeAnswerView.classList.add('hidden');
+                submittedConfirmView.classList.add('hidden');
                 return;
             } else {
                 blockedView.classList.add('hidden');
-                activeAnswerView.classList.remove('hidden');
-                document.getElementById('submittedConfirmView').classList.add('hidden');
-                document.getElementById('submitBtn').disabled = false;
+                if (q.status === 'locked') {
+                    activeAnswerView.classList.add('hidden');
+                    submittedConfirmView.classList.remove('hidden');
+                    document.getElementById('lockStatusText').textContent = "Svarene er låst for denne oppgaven.";
+                } else {
+                    activeAnswerView.classList.remove('hidden');
+                    submittedConfirmView.classList.add('hidden');
+                }
             }
 
             buildRuler(q.min_value, q.max_value, q.step_value, q.unit_type, q.custom_unit);
@@ -318,6 +339,7 @@
 
             document.getElementById('activeAnswerView').classList.add('hidden');
             document.getElementById('submittedConfirmView').classList.remove('hidden');
+            document.getElementById('lockStatusText').textContent = "Svaret ditt er låst inn! Følg med på skjermen.";
         }
 
         init();
