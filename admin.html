@@ -192,21 +192,32 @@
         let currentActiveQuestionId = null;
 
         async function initData() {
-            const { data: classesData } = await supabase.from('classes').select('*').order('name');
-            allClasses = classesData || [];
-            updateCreatorClassDropdown();
-            await loadCompetitionsDropdown();
+            try {
+                const { data: classesData, error: classErr } = await supabase.from('classes').select('*').order('name');
+                if (classErr) console.error("Feil ved henting av klasser:", classErr);
+                allClasses = classesData || [];
+                updateCreatorClassDropdown();
+
+                await loadCompetitionsDropdown();
+            } catch (err) {
+                console.error("Kritisk feil i initData:", err);
+            }
         }
 
         async function loadCompetitionsDropdown() {
             const select = document.getElementById('competitionSelect');
             const savedCompId = localStorage.getItem('kmk_active_comp_id');
 
+            console.log("Henter konkurranser fra Supabase...");
             const { data: comps, error } = await supabase.from('competitions').select('*').order('id', { ascending: false });
+            
             if (error) {
-                console.error("Feil ved henting av konkurranser:", error);
+                console.error("Supabase-feil ved henting av konkurranser:", error);
+                select.innerHTML = '<option value="">-- Feil ved tilkobling til database --</option>';
                 return;
             }
+
+            console.log("Hentet konkurranser:", comps);
 
             if (!comps || comps.length === 0) {
                 select.innerHTML = '<option value="">-- Ingen konkurranser funnet --</option>';
