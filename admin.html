@@ -43,10 +43,12 @@
             </div>
         </div>
 
-        <!-- LIVE KONTROLLER (De nye knappene) -->
+        <!-- LIVE KONTROLLER -->
         <div id="liveControlSection" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4 hidden">
             <h2 class="text-xl font-semibold text-emerald-400">🎮 Live Spillkontroller</h2>
-            <div id="activeLiveStatus" class="text-sm bg-slate-900 p-3 rounded border border-slate-700 text-slate-300">
+            
+            <!-- Tydeligere og mer synlig statusboks -->
+            <div id="activeLiveStatus" class="p-4 rounded-xl border border-slate-600 bg-slate-900 text-slate-300 text-center font-bold text-lg">
                 Status: Ingen aktiv oppgave pågår.
             </div>
             
@@ -201,13 +203,37 @@
             const { data: questions } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
             currentQuestions = questions || [];
 
+            // Oppdater live-statusvisning basert på faktisk aktiv oppgave
+            const activeQ = currentQuestions.find(q => q.status === 'active');
+            const lockedQ = currentQuestions.find(q => q.status === 'locked');
+            const statusBox = document.getElementById('activeLiveStatus');
+
+            if (activeQ) {
+                statusBox.className = "p-4 rounded-xl border border-emerald-500 bg-emerald-950/80 text-emerald-300 text-center font-bold text-lg animate-pulse shadow-[0_0_15px_rgba(16,185,129,0.4)]";
+                statusBox.innerHTML = `🟢 OPPGAVE ÅPEN FOR SVAR!<br><span class="text-white text-base">#${activeQ.sort_order + 1}: ${activeQ.question_text}</span>`;
+            } else if (lockedQ) {
+                statusBox.className = "p-4 rounded-xl border border-amber-500 bg-amber-950/80 text-amber-300 text-center font-bold text-lg";
+                statusBox.innerHTML = `🔒 SVAR ER LÅST<br><span class="text-white text-base">"${lockedQ.question_text}"</span>`;
+            } else {
+                statusBox.className = "p-4 rounded-xl border border-slate-600 bg-slate-900 text-slate-300 text-center font-bold text-lg";
+                statusBox.textContent = "Status: Ingen aktiv oppgave pågår.";
+            }
+
+            if (currentQuestions.length === 0) {
+                container.innerHTML = `<p class="text-slate-400 italic">Ingen oppgaver opprettet enda.</p>`;
+                return;
+            }
+
+            // Inkluderer pilknappene (flytt opp/ned) på nytt her
             container.innerHTML = currentQuestions.map((q, index) => `
                 <div class="bg-slate-900 p-4 rounded border border-slate-700 flex justify-between items-center">
                     <div>
                         <span class="text-cyan-400 font-bold">#${index + 1}</span> <span class="font-medium">${q.question_text}</span> 
                         <span class="text-xs ml-2 px-2 py-0.5 rounded bg-slate-800 text-yellow-300">Status: ${q.status}</span>
                     </div>
-                    <div class="flex gap-2">
+                    <div class="flex items-center gap-2">
+                        <button onclick="moveQuestion(${q.id}, 'up')" class="bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded text-sm font-bold" title="Flytt opp">⬆️</button>
+                        <button onclick="moveQuestion(${q.id}, 'down')" class="bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded text-sm font-bold" title="Flytt ned">⬇️</button>
                         <button onclick="editQuestion(${q.id})" class="bg-amber-600 hover:bg-amber-500 px-3 py-1 rounded text-sm font-bold">Rediger</button>
                         <button onclick="deleteQuestion(${q.id})" class="bg-red-600 hover:bg-red-500 px-3 py-1 rounded text-sm font-bold">Slett</button>
                     </div>
@@ -215,61 +241,86 @@
             `).join('');
         }
 
+        window.moveQuestion = async function(id, direction) {
+            const index = currentQuestions.findIndex(q => q.id === id);
+            if (index === -1) return;
+
+            const targetIndex = direction === 'up' ? index - 1 : index + 1;
+            if (targetIndex < 0 || targetIndex >= currentQuestions.length) return;
+
+            const temp = currentQuestions[index];
+            currentQuestions[index] = currentQuestions[targetIndex];
+            currentQuestions[targetIndex] = temp;
+
+            for (let i = 0; i < currentQuestions.length; i++) {
+                await supabase.from('questions').update({ sort_order: i }).eq('id', currentQuestions[i].id);
+            }
+
+            const compId = document.getElementById('competitionSelect').value;
+            loadQuestionsForCompetition(compId);
+        }
+
         // --- LIVE SPILLKONTROLLER ---
         window.startKlasseMotKlasse = async function() {
             const compId = document.getElementById('competitionSelect').value;
             if (!compId || currentQuestions.length === 0) return alert('Ingen oppgaver funnet.');
             
-            // Sett første oppgave til 'active'
             const firstQ = currentQuestions[0];
             await supabase.from('questions').update({ status: 'active' }).eq('id', firstQ.id);
-            document.getElementById('activeLiveStatus').textContent = `Aktiv oppgave: "${firstQ.question_text}" er nå ÅPEN for svar!`;
+            await loadQuestionsForCompetition(compId);
             alert('Første oppgave er startet på elevtelefonene!');
         }
 
         window.lockAnswersCountdown = async function() {
-            const activeQ = currentQuestions.find(q => q.status === 'active');
-            if (!activeQ) return alert('Ingen aktiv oppgave å låse.');
+            const compId = document.getElementById('competitionSelect').value;
+            // Hent fersk liste for å sikre at vi treffer riktig oppgave
+            const { data: qList } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
+            const activeQ = (qList || []).find(q => q.status === 'active');
+            
+            if (!activeQ) return alert('Ingen aktiv oppgave å låse. Trykk "Start klasse mot klasse" eller "Neste oppgave" først.');
 
             for (let i = 5; i > 0; i--) {
-                document.getElementById('activeLiveStatus').textContent = `Låser om ${i} sekunder...`;
+                document.getElementById('activeLiveStatus').textContent = `⏳ Låser om ${i} sekunder...`;
                 await new Promise(r => setTimeout(r, 1000));
             }
 
             await supabase.from('questions').update({ status: 'locked' }).eq('id', activeQ.id);
-            activeQ.status = 'locked';
-            document.getElementById('activeLiveStatus').textContent = `Svarene er LÅST for oppgave: "${activeQ.question_text}".`;
+            await loadQuestionsForCompetition(compId);
             alert('Tiden er ute! Svarene er låst.');
         }
 
         window.openAnswersAgain = async function() {
-            const lockedQ = currentQuestions.find(q => q.status === 'locked' || q.status === 'active');
-            if (!lockedQ) return alert('Ingen aktuell oppgave å åpne.');
+            const compId = document.getElementById('competitionSelect').value;
+            const { data: qList } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
+            const targetQ = (qList || []).find(q => q.status === 'locked' || q.status === 'active');
+            
+            if (!targetQ) return alert('Ingen aktuell oppgave å åpne.');
 
-            await supabase.from('questions').update({ status: 'active' }).eq('id', lockedQ.id);
-            lockedQ.status = 'active';
-            document.getElementById('activeLiveStatus').textContent = `Oppgaven er gjenåpnet for svar!`;
+            await supabase.from('questions').update({ status: 'active' }).eq('id', targetQ.id);
+            await loadQuestionsForCompetition(compId);
             alert('Svarene er åpnet igjen.');
         }
 
         window.nextQuestion = async function() {
-            const currentIndex = currentQuestions.findIndex(q => q.status === 'active' || q.status === 'locked');
+            const compId = document.getElementById('competitionSelect').value;
+            const { data: qList } = await supabase.from('questions').select('*').eq('competition_id', compId).order('sort_order');
             
-            // Sett nåværende til 'done'
+            const currentIndex = (qList || []).findIndex(q => q.status === 'active' || q.status === 'locked');
+            
             if (currentIndex !== -1) {
-                await supabase.from('questions').update({ status: 'done' }).eq('id', currentQuestions[currentIndex].id);
+                await supabase.from('questions').update({ status: 'done' }).eq('id', qList[currentIndex].id);
             }
 
             const nextIndex = currentIndex === -1 ? 0 : currentIndex + 1;
-            if (nextIndex >= currentQuestions.length) {
+            if (!qList || nextIndex >= qList.length) {
                 alert('Dette var siste oppgave!');
+                await loadQuestionsForCompetition(compId);
                 return;
             }
 
-            const nextQ = currentQuestions[nextIndex];
+            const nextQ = qList[nextIndex];
             await supabase.from('questions').update({ status: 'active' }).eq('id', nextQ.id);
-            await loadQuestionsForCompetition(document.getElementById('competitionSelect').value);
-            document.getElementById('activeLiveStatus').textContent = `Neste oppgave aktiv: "${nextQ.question_text}"`;
+            await loadQuestionsForCompetition(compId);
             alert('Neste oppgave er sendt ut til elevene!');
         }
 
@@ -288,6 +339,32 @@
 
         window.closeModal = function() {
             document.getElementById('resultModal').classList.add('hidden');
+        }
+
+        // Global redigeringsfunksjon
+        window.editQuestion = function(id) {
+            const q = currentQuestions.find(item => item.id === id);
+            if (!q) return;
+            document.getElementById('editingQuestionId').value = q.id;
+            document.getElementById('formTitle').textContent = 'Rediger oppgave';
+            document.getElementById('saveQuestionBtn').textContent = 'Lagre Endringer';
+            document.getElementById('cancelEditBtn').classList.remove('hidden');
+
+            document.getElementById('qText').value = q.question_text;
+            document.getElementById('qCreatorClass').value = q.created_by_class;
+            document.getElementById('qUnitType').value = q.unit_type;
+            document.getElementById('qCustomUnit').value = q.custom_unit || '';
+            document.getElementById('qMin').value = q.min_value;
+            document.getElementById('qMax').value = q.max_value;
+            document.getElementById('qStep').value = q.step_value || 1;
+            document.getElementById('qCorrect').value = q.correct_answer || '';
+            window.scrollTo({ top: 300, behavior: 'smooth' });
+        }
+
+        window.deleteQuestion = async function(id) {
+            if (!confirm('Slette denne oppgaven?')) return;
+            await supabase.from('questions').delete().eq('id', id);
+            loadQuestionsForCompetition(document.getElementById('competitionSelect').value);
         }
 
         document.getElementById('competitionSelect').addEventListener('change', (e) => {
