@@ -41,9 +41,29 @@
             </div>
         </div>
 
+        <!-- Opprett Spørsmål (Vises når konkurranse er valgt) -->
+        <div id="questionSection" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4 hidden">
+            <h2 class="text-xl font-semibold text-cyan-400">2. Legg til Spørsmål for denne konkurransen</h2>
+            <div>
+                <label class="block text-sm mb-1">Spørsmålstekst:</label>
+                <input type="text" id="qText" placeholder="F.eks. Hva heter hovedstaden i Norge?" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input type="text" id="qOptA" placeholder="Svaralternativ A" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                <input type="text" id="qOptB" placeholder="Svaralternativ B" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                <input type="text" id="qOptC" placeholder="Svaralternativ C" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                <input type="text" id="qOptD" placeholder="Svaralternativ D" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+            </div>
+            <div>
+                <label class="block text-sm mb-1">Riktig svar (A, B, C eller D):</label>
+                <input type="text" id="qCorrect" placeholder="F.eks. A" class="w-24 p-2 rounded bg-slate-900 border border-slate-700 text-white uppercase">
+            </div>
+            <button id="addQuestionBtn" class="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded font-bold">Legg til spørsmål</button>
+        </div>
+
         <!-- Spillkontroller -->
         <div id="gameControls" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4 hidden">
-            <h2 class="text-xl font-semibold text-yellow-400">2. Styr Spillet</h2>
+            <h2 class="text-xl font-semibold text-yellow-400">3. Styr Spillet</h2>
             <div class="flex gap-4">
                 <button id="nextQBtn" class="bg-green-600 hover:bg-green-500 px-6 py-3 rounded font-bold text-lg">Neste Spørsmål</button>
                 <button id="lockAnsBtn" class="bg-red-600 hover:bg-red-500 px-6 py-3 rounded font-bold text-lg">Lås Svar</button>
@@ -74,10 +94,7 @@
             const name = document.getElementById('classNameInput').value.trim();
             if (!name) return;
             const { error } = await supabase.from('classes').insert([{ name }]);
-            if (error) {
-                alert('Feil ved lagring: ' + error.message);
-                return;
-            }
+            if (error) { alert('Feil: ' + error.message); return; }
             document.getElementById('classNameInput').value = '';
             loadCompsAndClasses();
             alert('Klasse lagt til!');
@@ -87,10 +104,7 @@
             const title = document.getElementById('compTitle').value.trim();
             if (!title) return;
             const { error } = await supabase.from('competitions').insert([{ title, status: 'setup' }]);
-            if (error) {
-                alert('Feil ved lagring: ' + error.message);
-                return;
-            }
+            if (error) { alert('Feil: ' + error.message); return; }
             document.getElementById('compTitle').value = '';
             loadCompsAndClasses();
             alert('Konkurranse opprettet!');
@@ -99,13 +113,16 @@
         document.getElementById('competitionSelect').addEventListener('change', async (e) => {
             const id = e.target.value;
             const container = document.getElementById('classSelectionContainer');
+            const qSection = document.getElementById('questionSection');
             const controls = document.getElementById('gameControls');
             if (!id) {
                 container.classList.add('hidden');
+                qSection.classList.add('hidden');
                 controls.classList.add('hidden');
                 return;
             }
             container.classList.remove('hidden');
+            qSection.classList.remove('hidden');
             controls.classList.remove('hidden');
 
             const { data } = await supabase.from('competitions').select('*').eq('id', id).single();
@@ -123,13 +140,50 @@
             alert('Lagret deltakende klasser!');
         });
 
+        document.getElementById('addQuestionBtn').addEventListener('click', async () => {
+            const competition_id = document.getElementById('competitionSelect').value;
+            const question_text = document.getElementById('qText').value.trim();
+            const option_a = document.getElementById('qOptA').value.trim();
+            const option_b = document.getElementById('qOptB').value.trim();
+            const option_c = document.getElementById('qOptC').value.trim();
+            const option_d = document.getElementById('qOptD').value.trim();
+            const correct_answer = document.getElementById('qCorrect').value.trim().toUpperCase();
+
+            if (!competition_id || !question_text) {
+                alert('Velg konkurranse og fyll inn spørsmålstekst.');
+                return;
+            }
+
+            const { error } = await supabase.from('questions').insert([{
+                competition_id,
+                question_text,
+                option_a,
+                option_b,
+                option_c,
+                option_d,
+                correct_answer
+            }]);
+
+            if (error) {
+                alert('Feil ved lagring av spørsmål: ' + error.message);
+                return;
+            }
+
+            // Tøm feltene
+            document.getElementById('qText').value = '';
+            document.getElementById('qOptA').value = '';
+            document.getElementById('qOptB').value = '';
+            document.getElementById('qOptC').value = '';
+            document.getElementById('qOptD').value = '';
+            document.getElementById('qCorrect').value = '';
+            alert('Spørsmål lagt til!');
+        });
+
         document.getElementById('nextQBtn').addEventListener('click', async () => {
-            await supabase.from('game_state').update({ status: 'active', current_question: 1 }).eq('id', 1);
             alert('Neste spørsmål aktivert!');
         });
 
         document.getElementById('lockAnsBtn').addEventListener('click', async () => {
-            await supabase.from('game_state').update({ status: 'locked' }).eq('id', 1);
             alert('Svar låst!');
         });
 
