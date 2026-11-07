@@ -203,10 +203,18 @@
             const savedCompId = localStorage.getItem('kmk_active_comp_id');
 
             const { data: comps, error } = await supabase.from('competitions').select('*').order('id', { ascending: false });
-            if (error) return;
+            if (error) {
+                console.error("Feil ved henting av konkurranser:", error);
+                return;
+            }
 
-            select.innerHTML = '<option value="">-- Velg konkurranse --</option>' + (comps || []).map(co => `
-                <option value="${co.id}">${co.title} (Status: ${co.status})</option>
+            if (!comps || comps.length === 0) {
+                select.innerHTML = '<option value="">-- Ingen konkurranser funnet --</option>';
+                return;
+            }
+
+            select.innerHTML = '<option value="">-- Velg konkurranse --</option>' + comps.map(co => `
+                <option value="${co.id}">${co.title || 'Uten navn'} (Status: ${co.status || 'setup'})</option>
             `).join('');
 
             if (savedCompId && select.querySelector(`option[value="${savedCompId}"]`)) {
