@@ -2,12 +2,12 @@
 <html lang="no">
 <head>
     <meta charset="UTF-8">
-    <title>Arrangør - Klasse mot klasse</title>
+    <title>Arrangør - Klasse mot klasse (Alle mot 1)</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-white min-h-screen p-6">
     <div class="max-w-4xl mx-auto space-y-8">
-        <h1 class="text-3xl font-bold text-yellow-400">Arrangørpanel - Klasse mot klasse</h1>
+        <h1 class="text-3xl font-bold text-yellow-400">Arrangørpanel - Alle mot 1</h1>
 
         <!-- Konkurranse- og klasseadministrasjon -->
         <div class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4">
@@ -15,11 +15,11 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-sm mb-1">Opprett ny konkurranse:</label>
-                    <input type="text" id="compTitle" placeholder="F.eks. Høstquiz 8. trinn" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white mb-2">
+                    <input type="text" id="compTitle" placeholder="F.eks. Alle mot 1 - Vår 2026" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white mb-2">
                     <button id="createCompBtn" class="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded font-bold w-full">Opprett Konkurranse</button>
                 </div>
                 <div>
-                    <label class="block text-sm mb-1">Legg til ny klasse (f.eks. 8A):</label>
+                    <label class="block text-sm mb-1">Legg til ekstra klasse:</label>
                     <div class="flex gap-2">
                         <input type="text" id="classNameInput" placeholder="Klassenavn" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
                         <button id="addClassBtn" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded font-bold">Legg til</button>
@@ -33,56 +33,86 @@
                     <option value="">-- Velg konkurranse --</option>
                 </select>
             </div>
-
-            <div id="classSelectionContainer" class="hidden mt-4 pt-4 border-t border-slate-700">
-                <h3 class="text-md font-semibold mb-2">Velg hvilke klasser som deltar i denne konkurransen:</h3>
-                <div id="classListCheckboxes" class="flex flex-wrap gap-4 mb-4"></div>
-                <button id="saveCompClassesBtn" class="bg-yellow-600 hover:bg-yellow-500 px-4 py-2 rounded font-bold text-black">Lagre deltakende klasser</button>
-            </div>
         </div>
 
-        <!-- Opprett Spørsmål (Vises når konkurranse er valgt) -->
+        <!-- Legg til Spørsmål ("Alle mot 1" oppsett) -->
         <div id="questionSection" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4 hidden">
-            <h2 class="text-xl font-semibold text-cyan-400">2. Legg til Spørsmål for denne konkurransen</h2>
+            <h2 class="text-xl font-semibold text-cyan-400">2. Opprett "Alle mot 1"-oppgave</h2>
+            
             <div>
-                <label class="block text-sm mb-1">Spørsmålstekst:</label>
-                <input type="text" id="qText" placeholder="F.eks. Hva heter hovedstaden i Norge?" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                <label class="block text-sm mb-1">Oppgavetekst:</label>
+                <textarea id="qText" rows="3" placeholder="F.eks. Hvor mange sekunder bruker lærerne på å løpe 100 meter?" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white"></textarea>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input type="text" id="qOptA" placeholder="Svaralternativ A" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
-                <input type="text" id="qOptB" placeholder="Svaralternativ B" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
-                <input type="text" id="qOptC" placeholder="Svaralternativ C" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
-                <input type="text" id="qOptD" placeholder="Svaralternativ D" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
-            </div>
-            <div>
-                <label class="block text-sm mb-1">Riktig svar (A, B, C eller D):</label>
-                <input type="text" id="qCorrect" placeholder="F.eks. A" class="w-24 p-2 rounded bg-slate-900 border border-slate-700 text-white uppercase">
-            </div>
-            <button id="addQuestionBtn" class="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded font-bold">Legg til spørsmål</button>
-        </div>
 
-        <!-- Spillkontroller -->
-        <div id="gameControls" class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-4 hidden">
-            <h2 class="text-xl font-semibold text-yellow-400">3. Styr Spillet</h2>
-            <div class="flex gap-4">
-                <button id="nextQBtn" class="bg-green-600 hover:bg-green-500 px-6 py-3 rounded font-bold text-lg">Neste Spørsmål</button>
-                <button id="lockAnsBtn" class="bg-red-600 hover:bg-red-500 px-6 py-3 rounded font-bold text-lg">Lås Svar</button>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm mb-1">Hvilken klasse har laget oppgaven?</label>
+                    <select id="qCreatorClass" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                        <option value="Arrangør">Arrangør (Alle kan svare)</option>
+                        <option value="Aqua">Aqua</option>
+                        <option value="Capture">Capture</option>
+                        <option value="FriX">FriX</option>
+                        <option value="Global Active">Global Active</option>
+                        <option value="Global eXtreme">Global eXtreme</option>
+                        <option value="Musikal&Reise">Musikal&Reise</option>
+                        <option value="Musikk&Reise">Musikk&Reise</option>
+                        <option value="Reise&Bistand">Reise&Bistand</option>
+                        <option value="Sport&Outdoor">Sport&Outdoor</option>
+                        <option value="Stipendiatene">Stipendiatene</option>
+                        <option value="Ansatt">Ansatt</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm mb-1">Enhet:</label>
+                    <select id="qUnitType" onchange="toggleCustomUnit()" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                        <option value="tid">Tid (min:sek)</option>
+                        <option value="cm">cm</option>
+                        <option value="meter">meter</option>
+                        <option value="liter">liter</option>
+                        <option value="antall">antall</option>
+                        <option value="egendefinert">Egendefinert</option>
+                    </select>
+                </div>
             </div>
+
+            <div id="customUnitContainer" class="hidden">
+                <label class="block text-sm mb-1">Skriv inn egendefinert enhet:</label>
+                <input type="text" id="qCustomUnit" placeholder="F.eks. kg, poeng, runder" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm mb-1">Minimum utfall (tall):</label>
+                    <input type="number" id="qMin" placeholder="0" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                </div>
+                <div>
+                    <label class="block text-sm mb-1">Maksimum utfall (tall):</label>
+                    <input type="number" id="qMax" placeholder="300" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                </div>
+                <div>
+                    <label class="block text-sm mb-1">Steg (hvor mye den hopper):</label>
+                    <input type="number" id="qStep" placeholder="1" value="1" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm mb-1">Last opp oppgavebilde:</label>
+                <input type="file" id="qImageFile" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white text-sm">
+            </div>
+
+            <div>
+                <label class="block text-sm mb-1">Fasit (tallverdi / sekund-ekvivalent, kan fylles ut senere):</label>
+                <input type="number" id="qCorrect" placeholder="F.eks. 75" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
+            </div>
+
+            <button id="addQuestionBtn" class="bg-cyan-600 hover:bg-cyan-500 px-6 py-3 rounded font-bold w-full text-lg">Lagre Oppgave</button>
         </div>
     </div>
 
     <script type="module">
         import { supabase } from './supabaseClient.js';
 
-        async function loadCompsAndClasses() {
-            const { data: classes } = await supabase.from('classes').select('*');
-            const box = document.getElementById('classListCheckboxes');
-            box.innerHTML = (classes || []).map(c => `
-                <label class="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" value="${c.id}" class="comp-class-cb w-5 h-5"> ${c.name}
-                </label>
-            `).join('');
-
+        async function loadCompetitions() {
             const { data: comps } = await supabase.from('competitions').select('*');
             const select = document.getElementById('competitionSelect');
             select.innerHTML = '<option value="">-- Velg konkurranse --</option>' + (comps || []).map(co => `
@@ -90,15 +120,15 @@
             `).join('');
         }
 
-        document.getElementById('addClassBtn').addEventListener('click', async () => {
-            const name = document.getElementById('classNameInput').value.trim();
-            if (!name) return;
-            const { error } = await supabase.from('classes').insert([{ name }]);
-            if (error) { alert('Feil: ' + error.message); return; }
-            document.getElementById('classNameInput').value = '';
-            loadCompsAndClasses();
-            alert('Klasse lagt til!');
-        });
+        window.toggleCustomUnit = function() {
+            const val = document.getElementById('qUnitType').value;
+            const container = document.getElementById('customUnitContainer');
+            if (val === 'egendefinert') {
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+            }
+        }
 
         document.getElementById('createCompBtn').addEventListener('click', async () => {
             const title = document.getElementById('compTitle').value.trim();
@@ -106,88 +136,62 @@
             const { error } = await supabase.from('competitions').insert([{ title, status: 'setup' }]);
             if (error) { alert('Feil: ' + error.message); return; }
             document.getElementById('compTitle').value = '';
-            loadCompsAndClasses();
+            loadCompetitions();
             alert('Konkurranse opprettet!');
         });
 
-        document.getElementById('competitionSelect').addEventListener('change', async (e) => {
+        document.getElementById('competitionSelect').addEventListener('change', (e) => {
             const id = e.target.value;
-            const container = document.getElementById('classSelectionContainer');
             const qSection = document.getElementById('questionSection');
-            const controls = document.getElementById('gameControls');
             if (!id) {
-                container.classList.add('hidden');
                 qSection.classList.add('hidden');
-                controls.classList.add('hidden');
-                return;
+            } else {
+                qSection.classList.remove('hidden');
             }
-            container.classList.remove('hidden');
-            qSection.classList.remove('hidden');
-            controls.classList.remove('hidden');
-
-            const { data } = await supabase.from('competitions').select('*').eq('id', id).single();
-            if (data && data.active_class_ids) {
-                document.querySelectorAll('.comp-class-cb').forEach(cb => {
-                    cb.checked = data.active_class_ids.includes(cb.value);
-                });
-            }
-        });
-
-        document.getElementById('saveCompClassesBtn').addEventListener('click', async () => {
-            const id = document.getElementById('competitionSelect').value;
-            const selected = Array.from(document.querySelectorAll('.comp-class-cb:checked')).map(cb => cb.value);
-            await supabase.from('competitions').update({ active_class_ids: selected }).eq('id', id);
-            alert('Lagret deltakende klasser!');
         });
 
         document.getElementById('addQuestionBtn').addEventListener('click', async () => {
             const competition_id = document.getElementById('competitionSelect').value;
             const question_text = document.getElementById('qText').value.trim();
-            const option_a = document.getElementById('qOptA').value.trim();
-            const option_b = document.getElementById('qOptB').value.trim();
-            const option_c = document.getElementById('qOptC').value.trim();
-            const option_d = document.getElementById('qOptD').value.trim();
-            const correct_answer = document.getElementById('qCorrect').value.trim().toUpperCase();
+            const created_by_class = document.getElementById('qCreatorClass').value;
+            const unit_type = document.getElementById('qUnitType').value;
+            const custom_unit = document.getElementById('qCustomUnit').value.trim();
+            const min_value = parseFloat(document.getElementById('qMin').value);
+            const max_value = parseFloat(document.getElementById('qMax').value);
+            const step_value = parseFloat(document.getElementById('qStep').value);
+            const correct_answer = parseFloat(document.getElementById('qCorrect').value) || null;
 
-            if (!competition_id || !question_text) {
-                alert('Velg konkurranse og fyll inn spørsmålstekst.');
+            if (!competition_id || !question_text || isNaN(min_value) || isNaN(max_value)) {
+                alert('Vennligst fyll ut alle obligatoriske felt (tekst, min og max utfall).');
                 return;
             }
 
             const { error } = await supabase.from('questions').insert([{
                 competition_id,
                 question_text,
-                option_a,
-                option_b,
-                option_c,
-                option_d,
-                correct_answer
+                created_by_class,
+                unit_type,
+                custom_unit,
+                min_value,
+                max_value,
+                step_value,
+                correct_answer,
+                status: 'pending'
             }]);
 
             if (error) {
-                alert('Feil ved lagring av spørsmål: ' + error.message);
+                alert('Feil ved lagring: ' + error.message);
                 return;
             }
 
-            // Tøm feltene
+            alert('Oppgaven er lagret!');
             document.getElementById('qText').value = '';
-            document.getElementById('qOptA').value = '';
-            document.getElementById('qOptB').value = '';
-            document.getElementById('qOptC').value = '';
-            document.getElementById('qOptD').value = '';
+            document.getElementById('qMin').value = '';
+            document.getElementById('qMax').value = '';
             document.getElementById('qCorrect').value = '';
-            alert('Spørsmål lagt til!');
         });
 
-        document.getElementById('nextQBtn').addEventListener('click', async () => {
-            alert('Neste spørsmål aktivert!');
-        });
-
-        document.getElementById('lockAnsBtn').addEventListener('click', async () => {
-            alert('Svar låst!');
-        });
-
-        loadCompsAndClasses();
+        loadCompetitions();
     </script>
 </body>
 </html>
