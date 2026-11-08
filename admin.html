@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <title>Arrangør - Klasse mot klasse</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <!-- Bruk UMD-versjonen slik at createClient blir globalt tilgjengelig -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body class="bg-slate-900 text-white min-h-screen p-6">
@@ -46,14 +45,14 @@
     </div>
 
     <script>
-        // Initialiser Supabase riktig med UMD-objektet
+        // Bruker 'db' i stedet for 'supabase' for å unngå duplikat-kollisjoner
         const supabaseUrl = 'https://uwsvsfepktigasnpolql.supabase.co';
         const supabaseKey = 'sb_publishable_BevPqXgGFbuGtRBvz0uQNQ_yuSqxbSx';
-        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+        const db = supabase.createClient(supabaseUrl, supabaseKey);
 
         async function init() {
             try {
-                const { data, error } = await supabase.from('classes').select('*');
+                const { data, error } = await db.from('classes').select('*');
                 if (error) {
                     document.getElementById('connectionStatus').innerHTML = '<span class="text-red-400 font-bold">Databasefeil: ' + error.message + '</span>';
                     return;
@@ -68,7 +67,7 @@
 
         async function lastInnKonkurranser() {
             const select = document.getElementById('competitionSelect');
-            const { data: comps, error } = await supabase.from('competitions').select('*').order('id', { ascending: false });
+            const { data: comps, error } = await db.from('competitions').select('*').order('id', { ascending: false });
             
             if (error || !comps || comps.length === 0) {
                 select.innerHTML = '<option value="">-- Ingen konkurranser funnet --</option>';
@@ -93,7 +92,7 @@
                 return;
             }
 
-            const { error } = await supabase.from('competitions').insert([{ title: tittel, status: 'setup' }]);
+            const { error } = await db.from('competitions').insert([{ title: tittel, status: 'setup' }]);
             if (error) {
                 alert('Feil ved opprettelse: ' + error.message);
                 return;
@@ -112,7 +111,7 @@
                 return;
             }
 
-            const { error } = await supabase.from('classes').insert([{ name: navn }]);
+            const { error } = await db.from('classes').insert([{ name: navn }]);
             if (error) {
                 alert('Feil ved opprettelse av klasse: ' + error.message);
                 return;
