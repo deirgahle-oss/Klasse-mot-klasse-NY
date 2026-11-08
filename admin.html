@@ -189,14 +189,20 @@
 
         async function initData() {
             try {
+                console.log("Starter initData...");
                 const { data: classesData, error: classErr } = await supabase.from('classes').select('*').order('name');
-                if (classErr) console.error("Feil ved henting av klasser:", classErr);
+                if (classErr) {
+                    console.error("Feil ved henting av klasser:", classErr);
+                    alert("Databasefeil (klasser): " + classErr.message);
+                }
                 allClasses = classesData || [];
                 updateCreatorClassDropdown();
 
                 await loadCompetitionsDropdown();
+                console.log("initData fullført vellykket!");
             } catch (err) {
                 console.error("Kritisk feil under initData:", err);
+                alert("Kritisk feil ved oppstart av side: " + err.message);
             }
         }
 
