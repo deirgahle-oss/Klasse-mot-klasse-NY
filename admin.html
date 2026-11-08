@@ -2,135 +2,172 @@
 <html lang="no">
 <head>
     <meta charset="UTF-8">
-    <title>Arrangør - Klasse mot klasse</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arrangørpanel - Klasse mot klasse</title>
+    <!-- Stabil Tailwind CDN -->
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <!-- Stabil Supabase UMD CDN (ingen modulstrøbbel) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
 <body class="bg-slate-900 text-white min-h-screen p-6">
-    <div class="max-w-4xl mx-auto space-y-8">
-        <h1 class="text-3xl font-bold text-yellow-400">Arrangørpanel - Klasse mot klasse</h1>
+    <div class="max-w-4xl mx-auto space-y-6">
+        <header class="border-b border-slate-700 pb-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-yellow-400">⚡ Arrangørpanel (Ny Start)</h1>
+            <span id="connectionBadge" class="px-3 py-1 rounded text-xs font-bold bg-amber-600 text-white">Kobler til...</span>
+        </header>
 
-        <!-- Statusboks for tilkobling -->
-        <div id="connectionStatus" class="bg-slate-800 p-4 rounded-xl border border-slate-700 text-sm text-slate-300">
-            Kobler til databasen...
-        </div>
-
-        <!-- Konkurranse- og klasseadministrasjon -->
-        <div class="bg-slate-800 p-6 rounded-xl shadow border border-slate-700 space-y-6">
-            <h2 class="text-xl font-semibold text-cyan-400">1. Administrer Konkurranse & Klasser</h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-slate-900 p-4 rounded border border-slate-700">
-                    <label class="block text-sm mb-1 font-semibold">Opprett ny konkurranse:</label>
-                    <input type="text" id="compTitle" placeholder="F.eks. Klasse mot klasse - Vår 2026" class="w-full p-2 rounded bg-slate-800 border border-slate-600 text-white mb-2">
-                    <button onclick="opprettKonkurranse()" class="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded font-bold w-full">Opprett Konkurranse</button>
-                </div>
-
-                <div class="bg-slate-900 p-4 rounded border border-slate-700">
-                    <label class="block text-sm mb-1 font-semibold">Legg til ny klasse i systemet:</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="classNameInput" placeholder="F.eks. 10B eller Media" class="w-full p-2 rounded bg-slate-800 border border-slate-600 text-white">
-                        <button onclick="leggTilKlasse()" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded font-bold">Legg til</button>
-                    </div>
-                </div>
+        <!-- Seksjon 1: Opprett konkurranse og klasser -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Opprett konkurranse -->
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-3">
+                <h2 class="text-lg font-semibold text-cyan-400">1. Opprett Konkurranse</h2>
+                <input type="text" id="compTitleInput" placeholder="F.eks. Skole-NM Vår 2026" class="w-full p-2.5 rounded bg-slate-900 border border-slate-600 text-white">
+                <button onclick="opprettNyKonkurranse()" class="w-full bg-cyan-600 hover:bg-cyan-500 py-2.5 rounded font-bold transition">Opprett Konkurranse</button>
             </div>
 
-            <div>
-                <label class="block text-sm mb-1 font-semibold">Velg aktiv konkurranse:</label>
-                <select id="competitionSelect" onchange="velgKonkurranse(this.value)" class="w-full p-2 rounded bg-slate-900 border border-slate-700 text-white">
-                    <option value="">-- Velg konkurranse --</option>
-                </select>
+            <!-- Legg til klasse -->
+            <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-3">
+                <h2 class="text-lg font-semibold text-emerald-400">2. Legg til Klasse</h2>
+                <div class="flex gap-2">
+                    <input type="text" id="classNameInput" placeholder="F.eks. 10B" class="w-full p-2.5 rounded bg-slate-900 border border-slate-600 text-white">
+                    <button onclick="leggTilNyKlasse()" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 rounded font-bold transition">Legg til</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seksjon 2: Velg aktiv konkurranse -->
+        <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-3">
+            <h2 class="text-lg font-semibold text-yellow-300">3. Velg Aktiv Konkurranse</h2>
+            <select id="competitionSelect" onchange="lagreAktivKonkurranse(this.value)" class="w-full p-3 rounded bg-slate-900 border border-slate-600 text-white font-medium">
+                <option value="">-- Velg en konkurranse --</option>
+            </select>
+        </div>
+
+        <!-- Seksjon 3: Status / Logg -->
+        <div class="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-2">
+            <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Systemstatus & Meldinger</h3>
+            <div id="statusLog" class="bg-slate-900 p-3 rounded border border-slate-800 text-xs font-mono text-slate-300 h-28 overflow-y-auto">
+                Systemet er startet opp. Venter på handling...
             </div>
         </div>
     </div>
 
     <script>
-        // Bruker 'db' i stedet for 'supabase' for å unngå duplikat-kollisjoner
+        // Initialiser Supabase med dine nøkler
         const supabaseUrl = 'https://uwsvsfepktigasnpolql.supabase.co';
         const supabaseKey = 'sb_publishable_BevPqXgGFbuGtRBvz0uQNQ_yuSqxbSx';
         const db = supabase.createClient(supabaseUrl, supabaseKey);
 
-        async function init() {
+        function logg(melding, erFeil = false) {
+            const logBox = document.getElementById('statusLog');
+            const farge = erFeil ? 'text-red-400' : 'text-emerald-400';
+            logBox.innerHTML += `<div class="${farge}">[${new Date().toLocaleTimeString()}] ${melding}</div>`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        async function sjekkTilkoblingOgLastData() {
+            const badge = document.getElementById('connectionBadge');
             try {
+                logg('Tester kontakt med Supabase...');
                 const { data, error } = await db.from('classes').select('*');
-                if (error) {
-                    document.getElementById('connectionStatus').innerHTML = '<span class="text-red-400 font-bold">Databasefeil: ' + error.message + '</span>';
-                    return;
-                }
-                document.getElementById('connectionStatus').innerHTML = '<span class="text-emerald-400 font-bold">Tilkoblet Supabase med suksess! (' + data.length + ' klasser registrert)</span>';
                 
-                await lastInnKonkurranser();
+                if (error) throw error;
+
+                badge.textContent = 'Tilkoblet';
+                badge.className = 'px-3 py-1 rounded text-xs font-bold bg-emerald-600 text-white';
+                logg(`Tilkobling vellykket! Fant ${data.length} klasser i databasen.`);
+
+                await oppdaterKonkurranseDropdown();
             } catch (err) {
-                document.getElementById('connectionStatus').innerHTML = '<span class="text-red-400 font-bold">Kritisk feil ved oppstart: ' + err.message + '</span>';
+                badge.textContent = 'Feilet';
+                badge.className = 'px-3 py-1 rounded text-xs font-bold bg-red-600 text-white';
+                logg('Feil ved tilkobling: ' + err.message, true);
             }
         }
 
-        async function lastInnKonkurranser() {
+        async function oppdaterKonkurranseDropdown() {
             const select = document.getElementById('competitionSelect');
             const { data: comps, error } = await db.from('competitions').select('*').order('id', { ascending: false });
-            
-            if (error || !comps || comps.length === 0) {
-                select.innerHTML = '<option value="">-- Ingen konkurranser funnet --</option>';
+
+            if (error) {
+                logg('Kunne ikke hente konkurranser: ' + error.message, true);
                 return;
             }
 
-            select.innerHTML = '<option value="">-- Velg konkurranse --</option>' + comps.map(co => `
-                <option value="${co.id}">${co.title || 'Uten navn'} (Status: ${co.status || 'setup'})</option>
+            if (!comps || comps.length === 0) {
+                select.innerHTML = '<option value="">-- Ingen konkurranser funnet i databasen --</option>';
+                return;
+            }
+
+            select.innerHTML = '<option value="">-- Velg en konkurranse --</option>' + comps.map(c => `
+                <option value="${c.id}">${c.title} (Status: ${c.status || 'setup'})</option>
             `).join('');
 
+            // Gjenopprett valg fra localStorage hvis det finnes
             const lagretId = localStorage.getItem('kmk_active_comp_id');
             if (lagretId && select.querySelector(`option[value="${lagretId}"]`)) {
                 select.value = lagretId;
+                logg('Gjenopptok aktiv konkurranse-ID fra lagring: ' + lagretId);
             }
         }
 
-        async function opprettKonkurranse() {
-            const tittelInput = document.getElementById('compTitle');
-            const tittel = tittelInput.value.trim();
-            if (!tittel) {
+        async function opprettNyKonkurranse() {
+            const input = document.getElementById('compTitleInput');
+            const title = input.value.trim();
+            if (!title) {
                 alert('Vennligst skriv inn et navn på konkurransen.');
                 return;
             }
 
-            const { error } = await db.from('competitions').insert([{ title: tittel, status: 'setup' }]);
+            logg('Oppretter konkurranse: ' + title);
+            const { error } = await db.from('competitions').insert([{ title: title, status: 'setup' }]);
+
             if (error) {
                 alert('Feil ved opprettelse: ' + error.message);
+                logg('Feil ved opprettelse av konkurranse: ' + error.message, true);
                 return;
             }
 
-            alert('Konkurransen "' + tittel + '" ble opprettet!');
-            tittelInput.value = '';
-            lastInnKonkurranser();
+            alert('Konkurransen ble opprettet!');
+            logg('Konkurranse opprettet med suksess.');
+            input.value = '';
+            await oppdaterKonkurranseDropdown();
         }
 
-        async function leggTilKlasse() {
-            const klasseInput = document.getElementById('classNameInput');
-            const navn = klasseInput.value.trim();
-            if (!navn) {
+        async function leggTilNyKlasse() {
+            const input = document.getElementById('classNameInput');
+            const name = input.value.trim();
+            if (!name) {
                 alert('Vennligst skriv inn et klassenavn.');
                 return;
             }
 
-            const { error } = await db.from('classes').insert([{ name: navn }]);
+            logg('Legger til klasse: ' + name);
+            const { error } = await db.from('classes').insert([{ name: name }]);
+
             if (error) {
                 alert('Feil ved opprettelse av klasse: ' + error.message);
+                logg('Feil ved opprettelse av klasse: ' + error.message, true);
                 return;
             }
 
-            alert('Klassen "' + navn + '" ble lagt til!');
-            klasseInput.value = '';
-            init();
+            alert('Klassen ble lagt til i systemet!');
+            logg('Klasse lagt til med suksess.');
+            input.value = '';
         }
 
-        function velgKonkurranse(id) {
+        function lagreAktivKonkurranse(id) {
             if (id) {
                 localStorage.setItem('kmk_active_comp_id', id);
+                logg('Aktiv konkurranse satt til ID: ' + id);
             } else {
                 localStorage.removeItem('kmk_active_comp_id');
+                logg('Aktiv konkurranse fjernet.');
             }
         }
 
-        init();
+        // Kjør ved oppstart
+        sjekkTilkoblingOgLastData();
     </script>
 </body>
 </html>
