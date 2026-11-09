@@ -1,0 +1,1 @@
+ALTER TABLE "answers" ALTER COLUMN "sequence" SET DATA TYPE bigint USING "sequence"::bigint;
