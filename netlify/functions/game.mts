@@ -1,9 +1,9 @@
-import { getUser, verifyRequestOrigin } from '@netlify/identity';
+import { readGameRequest } from '../../lib/game-request.mjs';
 import { eq, and, sql } from 'drizzle-orm';
 import { randomUUID, createHash, randomBytes } from 'node:crypto';
 import { database } from '../../db/index.js';
 import { games, players, answers } from '../../db/schema.js';
-import { score, phase, rankings, CLASSES } from '../../lib/rules.mjs';
+import { score, phase, rankings } from '../../lib/rules.mjs';
 function fail(message:string,status=400):never { throw Object.assign(new Error(message),{status}); }
 function hash(s:string) {return createHash('sha256').update(s).digest('hex');}
 function clean(s:any,max=120) {return typeof s==='string'?s.trim().slice(0,max):'';}
@@ -21,19 +21,14 @@ function question(b:any,id= randomUUID()) {
 export default async (req:Request) => {
  try {
   if(req.method!=='POST') return new Response('Method not allowed',{status:405});
-  verifyRequestOrigin(req);
-  const b=await req.json(); const op=b.op; const db=database();
-  const user=await getUser();
-  const organizer=!!user&&(!!user.invitedAt||user.roles?.includes('admin'));
-  const requireOrganizer=()=>{if(!organizer) fail('Logg inn med en invitert arrangørkonto.',401);};
+  const b=await readGameRequest(req); const op=b.op; const db=database();
   const reply=(data:any)=>Response.json(data,{headers:{'Cache-Control':'no-store'}});
-  if(op==='me') return reply({user:organizer?{email:user!.email}:null,classes:CLASSES});
-  if(op==='list') {requireOrganizer();const list=await db.select({id:games.id,title:games.title,classes:games.classes,createdAt:games.createdAt}).from(games).where(eq(games.owner,user!.id));return reply({games:list});}
+  if(op==='list') {const list=await db.select({id:games.id,title:games.title,classes:games.classes,createdAt:games.createdAt}).from(games);return reply({games:list});}
   if(op==='create'||op==='import') {
-   requireOrganizer(); let title=clean(b.title)||'Klasse mot klasse', classes=Array.isArray(b.classes)?[...new Set<string>(b.classes.map(c=>clean(c,60)).filter(Boolean))]:[], questions:any[]=[];
+   let title=clean(b.title)||'Klasse mot klasse', classes=Array.isArray(b.classes)?[...new Set<string>(b.classes.map(c=>clean(c,60)).filter(Boolean))]:[], questions:any[]=[];
    if(op==='import') {const [source]=await db.select().from(games).where(eq(games.share,clean(b.share,100)));if(!source) fail('Delingslenken finnes ikke.',404);title=source.title;classes=source.classes;questions=source.questions.map(q=>({...q,id:randomUUID(),revealed:false}));}
    if(!classes.length||classes.length>40) fail('Velg minst én klasse (maks 40).');
-   const id=randomUUID();await db.insert(games).values({id,owner:user!.id,title,classes,questions,state:initial(),share:randomBytes(24).toString('hex')});return reply({id});
+   const id=randomUUID();await db.insert(games).values({id,owner:'shared-organizer',title,classes,questions,state:initial(),share:randomBytes(24).toString('hex')});return reply({id});
   }
   if(typeof b.id!=='string') fail('Mangler konkurranse.');
   // Lock one competition row for every mutation. Reads use a consistent snapshot.
@@ -41,11 +36,10 @@ export default async (req:Request) => {
    const mutation=op!=='state';
    const rows=mutation?await tx.select().from(games).where(eq(games.id,b.id)).for(op==='answer'?'share':'update'):await tx.select().from(games).where(eq(games.id,b.id));
    const g=rows[0]; if(!g) fail('Konkurransen finnes ikke.',404);
-   const [{now}]=await tx.select({now:sql<string>`clock_timestamp()`});const nowMs=new Date(now).getTime();
+   const [{now}]=await tx.select({now:sql<string>`clock_timestamp()`}).from(games).where(eq(games.id,g.id));const nowMs=new Date(now).getTime();
    const s={...g.state,phase:phase(g.state,nowMs)};g.state=s;
-   const owner=organizer&&g.owner===user!.id;
-   const adminOp=!['state','join','answer'].includes(op);
-   if(adminOp&&!owner) fail('Du har ikke tilgang til denne konkurransen.',403);
+   // Explicit views keep normal student responses redacted; administration is public.
+   const fullView=b.view==='admin'||b.view==='screen';
    let allPlayers=await tx.select().from(players).where(op==='answer'?and(eq(players.gameId,g.id),eq(players.id,String(b.playerId||''))):eq(players.gameId,g.id));
    let p=allPlayers.find(p=>p.id===b.playerId&&p.secretHash===hash(String(b.secret||'')));
    if(op==='join') {
@@ -58,15 +52,14 @@ export default async (req:Request) => {
     return {playerId:id,secret};
    }
    if(op==='state') {
-    if(b.screen&&!owner) fail('Storskjermen krever arrangørinnlogging.',401);
-    if(b.playerId&&!p&&!owner) fail('Deltakeren finnes ikke lenger. Registrer deg på nytt.',401);
-    const authorized=owner||!!p;
+    if(b.playerId&&!p&&!fullView) fail('Deltakeren finnes ikke lenger. Registrer deg på nytt.',401);
+    const authorized=fullView||!!p;
     if(!authorized) return {serverNow:nowMs,game:{id:g.id,title:g.title,classes:g.classes,registrationOpen:s.registrationOpen,count:allPlayers.length}};
     const current=g.questions[s.index];
     const allAnswers=p&&current?await tx.select().from(answers).where(and(eq(answers.playerId,p.id),eq(answers.questionId,current.id))):[];
     const ranks=s.rankings||rankings(g,allPlayers,[]);
     const topQuestion=current?.revealed?s.topQuestion||[]:[];
-    return {serverNow:nowMs,game:{id:g.id,title:g.title,classes:g.classes,state:owner?s:{phase:s.phase,index:s.index,deadline:s.deadline,registrationOpen:s.registrationOpen,music:s.music,version:s.version},questions:g.questions.map((q,i)=>owner? q: i===s.index?{...q,correct:q.revealed?q.correct:null}:{id:q.id}),...(owner?{share:g.share}:{}),count:allPlayers.length},player:p?{id:p.id,name:p.name,className:p.className}:null,answer:p?allAnswers.find(a=>a.playerId===p.id&&a.questionId===current?.id):null,players:owner?allPlayers.map(({secretHash,...p})=>p):undefined,rankings:['results','finished','revealed'].includes(s.phase)||owner?ranks:undefined,topQuestion};
+    return {serverNow:nowMs,game:{id:g.id,title:g.title,classes:g.classes,state:fullView?s:{phase:s.phase,index:s.index,deadline:s.deadline,registrationOpen:s.registrationOpen,music:s.music,version:s.version},questions:g.questions.map((q,i)=>fullView? q: i===s.index?{...q,correct:q.revealed?q.correct:null}:{id:q.id}),...(fullView?{share:g.share}:{}),count:allPlayers.length},player:p?{id:p.id,name:p.name,className:p.className}:null,answer:p?allAnswers.find(a=>a.playerId===p.id&&a.questionId===current?.id):null,players:fullView?allPlayers.map(({secretHash,...p})=>p):undefined,rankings:['results','finished','revealed'].includes(s.phase)||fullView?ranks:undefined,topQuestion};
    }
    const q=g.questions[s.index];
    if(op==='answer') {

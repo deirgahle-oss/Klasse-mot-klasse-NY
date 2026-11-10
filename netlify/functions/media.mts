@@ -1,11 +1,9 @@
 import { getStore } from '@netlify/blobs';
-import { getUser, verifyRequestOrigin } from '@netlify/identity';
 import { randomUUID } from 'node:crypto';
 export default async (req:Request) => {
  try {
  const store=getStore({name:'competition-media',consistency:'strong'});
  if(req.method==='POST') {
-  verifyRequestOrigin(req);const u=await getUser();if(!u||(!u.invitedAt&&!u.roles?.includes('admin')))return new Response('Logg inn som arrangør.',{status:401});
   const type=req.headers.get('content-type')?.split(';')[0];const ext=({'image/jpeg':'jpg','image/png':'png','image/webp':'webp','audio/mpeg':'mp3'})[type||''];
   if(!ext)return new Response('Velg JPG, PNG, WebP eller MP3.',{status:400});
   const data=await req.arrayBuffer();if(data.byteLength>4*1024*1024)return new Response('Filen må være mindre enn 4 MB.',{status:400});
