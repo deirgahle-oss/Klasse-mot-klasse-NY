@@ -17,3 +17,43 @@ test('storskjerm viser QR-kode og store oppgaver',async({page})=>{const d=fixtur
 test('arrangør redigerer tid som min:sek og sender sekunder til serveren',async({page})=>{const d=fixture();const {writes,errors}=await prepare(page,d,{admin:true});await page.goto('/admin.html?game='+gameId);await page.locator('#editor summary').click();await page.getByLabel('Oppgavetekst',{exact:true}).fill('Hvor lenge varer sangen?');await page.locator('select[name=unit]').selectOption('tid');await page.getByLabel('Maksimum',{exact:true}).fill('5:12');await page.getByLabel('Fasit (valgfritt)').fill('3:10');await page.screenshot({path:'/tmp/kmk-admin.png',fullPage:true});await page.locator('#saveQuestion').click();await expect.poll(()=>writes.find(w=>w.op==='question')?.question.max).toBe(312);expect(writes.find(w=>w.op==='question').question.correct).toBe(190);expect(errors).toEqual([]);});
 test('offentlig forside laster med den virkelige innloggingspakken',async({page})=>{const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('/');await expect(page.getByRole('heading',{name:'Hvor godt treffer du?'})).toBeVisible();expect(errors).toEqual([]);});
 test('tidsutkast beholdes som min:sek etter oppdatering',async({page})=>{const d=fixture();const {writes}=await prepare(page,d,{admin:true});await page.goto('/admin.html?game='+gameId);await page.locator('#editor summary').click();await page.locator('select[name=unit]').selectOption('tid');await page.getByLabel('Maksimum',{exact:true}).fill('5:12');await expect.poll(()=>writes.filter(w=>w.op==='draft').at(-1)?.draft.max).toBe('5:12');await page.reload();await page.locator('#editor summary').click();await expect(page.getByLabel('Maksimum',{exact:true})).toHaveValue('5:12');});
+
+async function loginFixture(page,loginBody){
+ await page.route('**/node_modules/.vite/deps/@netlify_identity.js*',route=>route.fulfill({contentType:'application/javascript',body:`export const handleAuthCallback=async()=>null;let signedIn=false;export const getUser=async()=>signedIn?{email:"fixture@example.test"}:null;export const login=async(email,password)=>{${loginBody}};export const logout=async()=>{};export const acceptInvite=async()=>{};export const updateUser=async()=>{};export const requestPasswordRecovery=async()=>{};export const refreshSession=async()=>{};`}));
+ await page.goto('/admin.html');
+ await page.getByLabel('E-post',{exact:true}).fill('fixture@example.test');
+ await page.getByLabel('Passord',{exact:true}).fill('short');
+}
+test('innlogging sender korte eksisterende passord og viser feil med nytt forsøk',async({page})=>{
+ await loginFixture(page,'throw Error("Invalid login credentials");');
+ await page.getByRole('button',{name:'Logg inn'}).click();
+ await expect(page.getByRole('alert')).toContainText('E-postadressen eller passordet stemmer ikke');
+ await expect(page.getByRole('button',{name:'Logg inn'})).toBeEnabled();
+ await page.getByRole('button',{name:'Glemt passord'}).click();
+ await expect(page.getByRole('status')).toContainText('Sjekk også søppelpost');
+});
+test('innlogging viser ventestatus og frigjør knappen ved tidsavbrudd',async({page})=>{
+ await page.clock.install();
+ await loginFixture(page,'await new Promise(()=>{});');
+ await page.getByRole('button',{name:'Logg inn'}).click();
+ await expect(page.getByRole('status')).toContainText('Kontrollerer innloggingen');
+ await expect(page.getByRole('button',{name:'Logger inn'})).toBeDisabled();
+ await page.clock.fastForward(21000);
+ await expect(page.getByRole('alert')).toContainText('Fikk ikke kontakt');
+ await expect(page.getByRole('button',{name:'Logg inn'})).toBeEnabled();
+});
+
+test('vellykket innlogging åpner konkurranseoversikten',async({page})=>{
+ await page.route('**/api/game',async route=>{const {op}=route.request().postDataJSON();await route.fulfill({json:op==='me'?{user:{email:'fixture@example.test'}}:{games:[]}});});
+ await loginFixture(page,'signedIn=true;');
+ await page.getByRole('button',{name:'Logg inn'}).click();
+ await expect(page.getByRole('heading',{name:'Mine konkurranser'})).toBeVisible();
+});
+
+test('manglende arrangørøkt viser forklaring i innloggingsskjemaet',async({page})=>{
+ await page.route('**/api/game',route=>route.fulfill({json:{user:null}}));
+ await loginFixture(page,'signedIn=true;');
+ await page.getByRole('button',{name:'Logg inn'}).click();
+ await expect(page.getByRole('alert')).toContainText('Innloggingen kunne ikke bekreftes');
+ await expect(page.getByRole('button',{name:'Logg inn'})).toBeEnabled();
+});
